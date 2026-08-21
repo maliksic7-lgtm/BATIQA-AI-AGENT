@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat — BATIQA AI</title>
+  <link rel="stylesheet" href="/css/guest.css">
+</head>
+<body>
+  <div class="chat">
+    <div class="chat__header">
+      <a href="/" style="text-decoration:none; color:var(--muted); font-size:18px;" aria-label="Back to home">←</a>
+      <div class="chat__avatar">B</div>
+      <div>
+        <div class="chat__name">BATIQA AI</div>
+        <div class="chat__status">● Online • Hospitality Assistant</div>
+      </div>
+      <div style="margin-left:auto; font-size:11px; color:var(--muted);" id="roomLabel"></div>
+    </div>
+
+    <div class="chat__messages" id="messages" aria-live="polite" aria-label="Conversation">
+      <!-- Welcome bubble -->
+      <div class="bubble bubble--ai" role="article" aria-label="BATIQA AI welcome">
+        <div style="font-weight:500;">Halo! Selamat datang di BATIQA Hotels.</div>
+        <div style="margin-top:4px; font-size:13px; color:var(--muted);">Ada yang bisa saya bantu? Try asking about breakfast, towels, or AC.</div>
+        <div class="bubble__meta">BATIQA AI • Just now</div>
+      </div>
+    </div>
+
+    <div class="chat__suggestions" id="suggestions" aria-label="Quick suggestions">
+      <button class="chip" data-msg="What's the breakfast schedule?">What's the breakfast schedule?</button>
+      <button class="chip" data-msg="I need 2 towels.">I need 2 towels.</button>
+      <button class="chip" data-msg="My AC isn't working.">My AC isn't working.</button>
+      <button class="chip" data-msg="Recommend dinner under Rp100.000.">Recommend dinner under Rp100.000.</button>
+    </div>
+
+    <div id="loading" class="loading" style="display:none;" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div> BATIQA AI is typing...
+    </div>
+    <div id="errorBar" class="error" style="display:none; margin:8px 16px;">
+      <span id="errorText">Failed to send</span>
+      <button class="error__retry" id="retryBtn">Retry</button>
+    </div>
+
+    <form class="chat__input" id="chatForm" aria-label="Send message">
+      <label for="msgInput" class="sr-only">Type your message</label>
+      <textarea id="msgInput" class="chat__field" placeholder="Ask about hotel, request service..." rows="1" aria-label="Type your message" autocomplete="off" enterkeyhint="send"></textarea>
+      <button type="submit" class="chat__send" id="sendBtn" aria-label="Send message">↑</button>
+    </form>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/chat.js"></script>
+</body>
+</html>

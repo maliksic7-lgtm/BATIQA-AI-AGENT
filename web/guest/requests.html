@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Requests — BATIQA</title>
+  <link rel="stylesheet" href="/css/guest.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header__inner">
+      <a href="/" class="logo">BATIQA<span>HOTELS</span></a>
+      <div class="header__room" id="roomBadge" style="display:none"></div>
+    </div>
+  </header>
+
+  <main class="container" style="padding-bottom:72px;">
+    <div style="display:flex; align-items:center; gap:10px; margin:18px 0 14px;">
+      <a href="/" style="text-decoration:none; color:var(--muted); font-size:14px; padding:6px 8px; border-radius:6px; border:1px solid transparent;" onfocus="this.style.borderColor='var(--navy)'" onblur="this.style.borderColor='transparent'">← Home</a>
+      <h1 style="font-size:19px; margin:0; color:var(--navy); font-weight:700; letter-spacing:-0.01em;">My Requests</h1>
+      <button id="refreshBtn" class="chip" style="margin-left:auto; font-weight:500;" aria-label="Refresh requests">↻ Refresh</button>
+    </div>
+
+    <div id="loading" class="loading"><div class="spinner"></div> Loading requests...</div>
+    <div id="error" class="error" style="display:none;">
+      <span id="errorText"></span>
+      <button class="error__retry" onclick="loadTickets()">Retry</button>
+    </div>
+    <div id="empty" class="empty" style="display:none;">
+      <div class="empty__icon">📋</div>
+      <p class="empty__title">No requests yet</p>
+      <p class="empty__desc">Your service and maintenance requests will appear here.</p>
+      <a href="/guest/chat.html" class="btn mt-16" style="max-width:240px; margin:16px auto 0;">Ask BATIQA AI</a>
+    </div>
+
+    <div id="list" class="grid" style="display:none;"></div>
+  </main>
+
+  <nav class="nav" aria-label="Primary">
+    <a href="/">Home</a>
+    <a href="/guest/chat.html">Chat</a>
+    <a href="/guest/requests.html" class="active" aria-current="page">Requests</a>
+    <a href="/guest/info.html">Info</a>
+  </nav>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/requests.js"></script>
+</body>
+</html>

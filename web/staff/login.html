@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Login — BATIQA Operations</title>
+  <link rel="stylesheet" href="/css/staff.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <h1>BATIQA<span style="font-weight:400; font-size:12px; letter-spacing:0.12em; color:var(--muted); display:block;">OPERATIONS</span></h1>
+      <p class="sub">Staff Operations Dashboard</p>
+
+      <div id="error" class="error" role="alert"></div>
+
+      <form id="loginForm" aria-label="Staff login">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="admin@batiqa.com" required autocomplete="username" aria-required="true">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="••••••••" required autocomplete="current-password" aria-required="true">
+        </div>
+        <button type="submit" class="btn" id="loginBtn">Sign In</button>
+      </form>
+
+      <p class="hint">
+        Demo credentials:<br>
+        <strong>admin@batiqa.com</strong> / batiqa123 (ADMIN)<br>
+        <strong>hk@batiqa.com</strong> / batiqa123 (HOUSEKEEPING)<br>
+        <strong>eng@batiqa.com</strong> / batiqa123 (ENGINEERING)
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // If already logged in, redirect to dashboard
+    if(localStorage.getItem('batiqa_staff_token')){
+      // verify quickly
+      fetch('/api/staff/me', {headers:{'Authorization':'Bearer '+localStorage.getItem('batiqa_staff_token')}})
+        .then(r=>{ if(r.ok) location.href='/staff/'; });
+    }
+    document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const btn=document.getElementById('loginBtn');
+      const err=document.getElementById('error');
+      err.style.display='none';
+      btn.disabled=true;
+      btn.textContent='Signing in...';
+      try{
+        const res=await fetch('/api/staff/login',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value
+          })
+        });
+        const data=await res.json();
+        if(!res.ok) throw new Error(data?.error?.message||'Login failed');
+        localStorage.setItem('batiqa_staff_token', data.token);
+        localStorage.setItem('batiqa_staff', JSON.stringify(data.staff));
+        location.href='/staff/';
+      }catch(ex){
+        err.textContent=ex.message;
+        err.style.display='block';
+      }finally{
+        btn.disabled=false;
+        btn.textContent='Sign In';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+Ticket Routing
+Housekeeping
+
+The following intents route to Housekeeping:
+
+HOUSEKEEPING_REQUEST
+TOWEL_REQUEST
+AMENITY_REQUEST
+ROOM_CLEANING_REQUEST
+Engineering
+
+The following intents route to Engineering:
+
+AC_PROBLEM
+TV_PROBLEM
+WIFI_PROBLEM
+LIGHT_PROBLEM
+SHOWER_PROBLEM
+PLUMBING_PROBLEM
+ROOM_EQUIPMENT_PROBLEM
+GENERAL_MAINTENANCE

@@ -1,0 +1,231 @@
+package router
+
+import (
+	"database/sql"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"batiqa-ai/internal/handler"
+	"batiqa-ai/internal/repository"
+	"batiqa-ai/internal/service/ai"
+	ticketservice "batiqa-ai/internal/service/ticket"
+)
+
+// New creates the HTTP router for Phase 1 (health only, no DB).
+// Kept for backward compatibility and tests without DB.
+func New() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/health", handler.HealthCheck)
+
+	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/health" {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			handler.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Endpoint not found")
+			return
+		}
+		// Try static for non-API
+		if serveStatic(w, r) {
+			return
+		}
+		handler.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Not found")
+	})
+
+	return chain(wrapped, recoveryMiddleware, loggingMiddleware, corsMiddleware)
+}
+
+// NewWithDB creates router with Phase 4 ticket & chat endpoints plus Phase 5 hotel-info.
+// Flow: Handler -> Service -> Repository -> MySQL per DATABASE.md
+func NewWithDB(db *sql.DB) http.Handler {
+	mux := http.NewServeMux()
+
+	// Health
+	mux.HandleFunc("/api/health", handler.HealthCheck)
+
+	if db != nil {
+		// Repositories
+		ticketRepo := repository.NewTicketRepository(db)
+		guestRepo := repository.NewGuestRepository(db)
+		convRepo := repository.NewConversationRepository(db)
+		hotelRepo := repository.NewHotelInfoRepository(db)
+		recRepo := repository.NewRecommendationRepository(db)
+
+		// Services
+		aiSvc := ai.NewService()
+		ticketSvc := ticketservice.NewService(ticketRepo, guestRepo)
+
+		// Handlers
+		ticketHandler := handler.NewTicketHandler(ticketSvc)
+		chatHandler := handler.NewChatHandlerWithHotel(aiSvc, ticketSvc, convRepo, guestRepo, hotelRepo)
+		hotelHandler := handler.NewHotelHandler(hotelRepo)
+		recHandler := handler.NewRecommendationHandler(recRepo)
+		staffAuthHandler := handler.NewStaffAuthHandler(repository.NewStaffRepository(db))
+		statsHandler := handler.NewStatsHandler(ticketRepo)
+
+		// Staff auth: POST /api/staff/login (public), GET /api/staff/me, POST /api/staff/logout (auth)
+		mux.HandleFunc("/api/staff/login", staffAuthHandler.Login)
+		mux.Handle("/api/staff/me", handler.AuthMiddleware(http.HandlerFunc(staffAuthHandler.Me)))
+		mux.Handle("/api/staff/logout", handler.AuthMiddleware(http.HandlerFunc(staffAuthHandler.Logout)))
+
+		// Stats: GET /api/tickets/stats (staff only)
+		mux.Handle("/api/tickets/stats", handler.AuthMiddleware(http.HandlerFunc(statsHandler.ServeHTTP)))
+
+		// Chat: POST /api/chat
+		mux.HandleFunc("/api/chat", chatHandler.ServeHTTP)
+
+		// Hotel info: GET /api/hotel-info
+		mux.HandleFunc("/api/hotel-info", hotelHandler.ServeHTTP)
+		mux.HandleFunc("/api/hotel_info", hotelHandler.ServeHTTP)
+
+		// Recommendations: GET /api/recommendations
+		mux.HandleFunc("/api/recommendations", recHandler.ServeHTTP)
+
+		// Tickets: POST /api/tickets, GET /api/tickets
+		mux.HandleFunc("/api/tickets", func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				ticketHandler.Create(w, r)
+			case http.MethodGet:
+				ticketHandler.List(w, r)
+			default:
+				handler.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed")
+			}
+		})
+
+		// Tickets detail and status: /api/tickets/{id} and /api/tickets/{id}/status (status requires staff auth)
+		mux.HandleFunc("/api/tickets/", func(w http.ResponseWriter, r *http.Request) {
+			path := r.URL.Path
+			if strings.HasSuffix(path, "/status") {
+				// Require staff auth for status update
+				handler.AuthMiddleware(http.HandlerFunc(ticketHandler.UpdateStatus)).ServeHTTP(w, r)
+				return
+			}
+			if r.Method == http.MethodGet {
+				ticketHandler.GetDetail(w, r)
+				return
+			}
+			handler.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed")
+		})
+	}
+
+	// Wrapped handler: API routes via mux, static files for frontend, 503 if DB nil
+	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// API routes via mux
+		apiPrefixes := []string{"/api/health", "/api/chat", "/api/tickets", "/api/hotel-info", "/api/hotel_info", "/api/recommendations", "/api/staff/login", "/api/staff/me", "/api/staff/logout", "/api/tickets/stats"}
+		for _, p := range apiPrefixes {
+			if r.URL.Path == p || strings.HasPrefix(r.URL.Path, p+"/") {
+				// DB required for all except health
+				if db == nil && p != "/api/health" {
+					handler.WriteError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Database not available")
+					return
+				}
+				mux.ServeHTTP(w, r)
+				return
+			}
+		}
+		// Direct api tickets prefix also
+		if strings.HasPrefix(r.URL.Path, "/api/tickets") || r.URL.Path == "/api/tickets" {
+			if db == nil {
+				handler.WriteError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Database not available")
+				return
+			}
+			mux.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			handler.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Endpoint not found")
+			return
+		}
+		// Static files for guest interface (Phase 5)
+		if serveStatic(w, r) {
+			return
+		}
+		handler.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Not found")
+	})
+
+	return chain(wrapped, recoveryMiddleware, loggingMiddleware, corsMiddleware)
+}
+
+// serveStatic tries to serve web assets for Phase 5 guest interface.
+// Returns true if served (or 404 handled), false if not a static path.
+func serveStatic(w http.ResponseWriter, r *http.Request) bool {
+	webDir := findWebDir()
+	if webDir == "" {
+		return false
+	}
+
+	// Clean path
+	path := r.URL.Path
+	if path == "/" {
+		path = "/index.html"
+	}
+	// Map URL path to filesystem
+	// / -> web/index.html, /guest/* -> web/guest/*, /css/* -> web/css/*, /js/* -> web/js/*, /guest -> web/guest/index.html
+	fullPath := filepath.Join(webDir, filepath.FromSlash(path))
+
+	// Handle directory -> try index.html
+	if strings.HasSuffix(path, "/") {
+		fullPath = filepath.Join(fullPath, "index.html")
+	}
+	// Check if file exists
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		// Try with .html extension for clean URLs? e.g., /guest -> /guest/index.html
+		if path == "/guest" {
+			alt := filepath.Join(webDir, "guest", "index.html")
+			if _, err2 := os.Stat(alt); err2 == nil {
+				http.ServeFile(w, r, alt)
+				return true
+			}
+		}
+		return false
+	}
+	if info.IsDir() {
+		// Serve index.html inside
+		index := filepath.Join(fullPath, "index.html")
+		if _, err := os.Stat(index); err == nil {
+			http.ServeFile(w, r, index)
+			return true
+		}
+		return false
+	}
+	http.ServeFile(w, r, fullPath)
+	return true
+}
+
+func findWebDir() string {
+	candidates := []string{
+		"web",
+		"../web",
+		"../../web",
+		filepath.Join(filepath.Dir(os.Args[0]), "web"),
+		filepath.Join(filepath.Dir(os.Args[0]), "../web"),
+	}
+	// Also try exe dir
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "web"))
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "..", "web"))
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "..", "..", "web"))
+	}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && info.IsDir() {
+			// Check has index.html
+			if _, err := os.Stat(filepath.Join(c, "index.html")); err == nil {
+				return c
+			}
+		}
+	}
+	return ""
+}
+
+// chain applies middlewares in order (first is outermost)
+func chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		h = middlewares[i](h)
+	}
+	return h
+}

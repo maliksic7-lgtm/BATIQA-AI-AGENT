@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BATIQA Hotels — Guest Assistant</title>
+  <meta name="description" content="BATIQA AI Guest Assistant — Scan QR, ask anything, request service instantly.">
+  <link rel="stylesheet" href="/css/guest.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header__inner">
+      <a href="/" class="logo">BATIQA<span>HOTELS</span></a>
+      <div class="header__room" id="roomBadge" style="display:none"></div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h1 class="hero__title">Welcome to<br>BATIQA Hotels</h1>
+      <p class="hero__subtitle">Your personal AI concierge — available 24/7. <span style="color:var(--navy); font-weight:600;">No app needed.</span></p>
+    </section>
+
+    <a href="/guest/" class="card card--ai" id="askAI">
+      <div class="card--ai__icon">✦</div>
+      <div>
+        <p class="card--ai__title">Ask BATIQA AI</p>
+        <p class="card--ai__desc">Ask anything about hotel • Request service • Report problem</p>
+      </div>
+    </a>
+
+    <h2 class="section__title">Quick Services</h2>
+    <div class="grid grid--2">
+      <a href="/guest/chat.html?quick=towel" class="btn-service" aria-label="Request housekeeping">
+        <div class="btn-service__icon">🧹</div>
+        <div class="btn-service__label">Housekeeping</div>
+        <div class="btn-service__desc">Towels • Cleaning</div>
+      </a>
+      <a href="/guest/chat.html?quick=ac" class="btn-service" aria-label="Report a problem">
+        <div class="btn-service__icon">🔧</div>
+        <div class="btn-service__label">Report Problem</div>
+        <div class="btn-service__desc">AC • TV • WiFi</div>
+      </a>
+      <a href="/guest/requests.html" class="btn-service" aria-label="View my requests">
+        <div class="btn-service__icon">📋</div>
+        <div class="btn-service__label">My Requests</div>
+        <div class="btn-service__desc">Track status</div>
+      </a>
+      <a href="/guest/info.html" class="btn-service" aria-label="View hotel information">
+        <div class="btn-service__icon">ℹ️</div>
+        <div class="btn-service__label">Hotel Info</div>
+        <div class="btn-service__desc">Breakfast • WiFi • Pool</div>
+      </a>
+    </div>
+
+    <h2 class="section__title">Explore</h2>
+    <div class="grid grid--2">
+      <a href="/guest/info.html#recommendations" class="btn-service" aria-label="Food recommendations">
+        <div class="btn-service__icon">🍜</div>
+        <div class="btn-service__label">Food</div>
+        <div class="btn-service__desc">Nearby • Budget</div>
+      </a>
+      <a href="/guest/info.html#recommendations" class="btn-service" aria-label="Nearby attractions">
+        <div class="btn-service__icon">📍</div>
+        <div class="btn-service__label">Nearby</div>
+        <div class="btn-service__desc">Cafe • Mall • ATM</div>
+      </a>
+    </div>
+
+    <div class="card mt-16" style="text-align:center; padding:12px;">
+      <p style="font-size:12px; color:var(--muted); margin:0;">Scan QR in your room for instant access. No download required.</p>
+    </div>
+  </main>
+
+  <nav class="nav" aria-label="Primary">
+    <a href="/" class="active" aria-current="page">Home</a>
+    <a href="/guest/chat.html">Chat</a>
+    <a href="/guest/requests.html">Requests</a>
+    <a href="/guest/info.html">Info</a>
+  </nav>
+
+  <script src="/js/api.js"></script>
+  <script>
+    // Room from QR ?room=305
+    (function(){
+      const params = new URLSearchParams(location.search);
+      const room = params.get('room') || params.get('room_number');
+      if(room){
+        localStorage.setItem('batiqa_room', room);
+        // also keep in URL for guest app
+        const badge = document.getElementById('roomBadge');
+        badge.textContent = 'Room ' + room;
+        badge.style.display = 'block';
+        // update links to keep room
+        document.querySelectorAll('a[href^="/guest"]').forEach(a=>{
+          const url = new URL(a.href, location.origin);
+          if(!url.searchParams.get('room')) url.searchParams.set('room', room);
+          a.href = url.pathname + url.search;
+        });
+        document.getElementById('askAI').href = '/guest/chat.html?room=' + encodeURIComponent(room);
+      } else {
+        const saved = localStorage.getItem('batiqa_room');
+        if(saved){
+          document.getElementById('roomBadge').textContent = 'Room ' + saved;
+          document.getElementById('roomBadge').style.display='block';
+        }
+      }
+      // Session id
+      if(!localStorage.getItem('batiqa_session')){
+        localStorage.setItem('batiqa_session', 'guest-' + Date.now() + '-' + Math.random().toString(36).slice(2,7));
+      }
+    })();
+  </script>
+</body>
+</html>

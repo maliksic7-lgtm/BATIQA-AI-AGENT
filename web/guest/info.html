@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hotel Info — BATIQA</title>
+  <link rel="stylesheet" href="/css/guest.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header__inner">
+      <a href="/" class="logo">BATIQA<span>HOTELS</span></a>
+      <div class="header__room" id="roomBadge" style="display:none"></div>
+    </div>
+  </header>
+
+  <main class="container" style="padding-bottom:72px;">
+    <div style="display:flex; align-items:center; gap:10px; margin:16px 0 12px;">
+      <a href="/" style="text-decoration:none; color:var(--muted);">← Home</a>
+      <h1 style="font-size:18px; margin:0; color:var(--navy);">Hotel Information</h1>
+    </div>
+
+    <div id="filter" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:8px; scrollbar-width:none;">
+      <button class="chip active" data-cat="">All</button>
+      <button class="chip" data-cat="BREAKFAST">Breakfast</button>
+      <button class="chip" data-cat="WIFI">WiFi</button>
+      <button class="chip" data-cat="POOL">Pool</button>
+      <button class="chip" data-cat="GYM">Gym</button>
+      <button class="chip" data-cat="RESTAURANT">Restaurant</button>
+    </div>
+
+    <div id="loading" class="loading"><div class="spinner"></div> Loading...</div>
+    <div id="error" class="error" style="display:none;"><span id="errorText"></span><button class="error__retry" onclick="loadInfo()">Retry</button></div>
+    <div id="empty" class="empty" style="display:none;"><div class="empty__icon">ℹ️</div><p class="empty__title">No information</p></div>
+    <div id="list" class="grid" style="display:none;"></div>
+
+    <h2 class="section__title" id="recommendations">Nearby Recommendations</h2>
+    <div id="recLoading" class="loading"><div class="spinner"></div> Loading recommendations...</div>
+    <div id="recList" class="grid" style="display:none;"></div>
+
+    <div class="card mt-16" style="text-align:center;">
+      <p style="font-size:13px; color:var(--muted); margin:0 0 10px;">Need help? Ask AI</p>
+      <a href="/guest/chat.html" class="btn">Ask BATIQA AI</a>
+    </div>
+  </main>
+
+  <nav class="nav">
+    <a href="/">Home</a>
+    <a href="/guest/chat.html">Chat</a>
+    <a href="/guest/requests.html">Requests</a>
+    <a href="/guest/info.html" class="active" aria-current="page">Info</a>
+  </nav>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/info.js"></script>
+</body>
+</html>
