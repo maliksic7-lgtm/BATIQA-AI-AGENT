@@ -2,10 +2,21 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"batiqa-ai/internal/repository"
 )
+
+// firstNonEmpty returns the first non-empty string.
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 // HotelHandler handles GET /api/hotel-info per HOTEL INFORMATION.MD
 type HotelHandler struct {
@@ -65,29 +76,10 @@ func (h *RecommendationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		cat = &v
 	}
 	var maxPrice *int
-	if v := strings.TrimSpace(q.Get("max_price")); v != "" {
-		// also support maxPrice alias
-		if v == "" {
-			v = q.Get("maxPrice")
-		}
-		// parse int
-		var p int
-		// simple parse
-		for _, c := range v {
-			if c < '0' || c > '9' {
-				p = 0
-				break
-			}
-			p = p*10 + int(c-'0')
-		}
-		if p > 0 {
-			maxPrice = &p
-		}
-	}
-	// Also support category filter via ?category=restaurant and ?max_price=100000
-	if cat == nil {
-		if v := strings.TrimSpace(q.Get("category")); v != "" {
-			cat = &v
+	if raw := firstNonEmpty(strings.TrimSpace(q.Get("max_price")), strings.TrimSpace(q.Get("maxPrice"))); raw != "" {
+		// parse int safely (rejects non-numeric, negative, overflow)
+		if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+			maxPrice = &n
 		}
 	}
 

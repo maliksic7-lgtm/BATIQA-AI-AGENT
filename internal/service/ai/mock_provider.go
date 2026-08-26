@@ -264,13 +264,7 @@ func buildResponse(intent, lang string, entities map[string]interface{}, roomNum
 	case IntentACProblem:
 		room := roomStr(entities, roomNumber)
 		if isID {
-			if room == "Anda" {
-				return "Baik, saya bisa membantu melaporkan masalah AC Anda. Boleh saya tahu nomor kamar Anda?"
-			}
 			return formatID("Baik, saya akan membantu melaporkan masalah AC Anda di kamar %s ke tim Engineering.", room)
-		}
-		if room == "your" {
-			return "Sure, I can help report your AC issue. Could you please tell me your room number?"
 		}
 		return formatEN("Sure, I will report your AC issue in room %s to Engineering.", room)
 	case IntentWifiProblem:
@@ -342,4 +336,3 @@ func formatEN(format string, a ...interface{}) string {
 func sprintf(format string, a ...interface{}) string {
 	return fmt.Sprintf(format, a...)
 }
-

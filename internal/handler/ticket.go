@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -34,7 +35,7 @@ func (h *TicketHandler) Create(w http.ResponseWriter, r *http.Request) {
 	t, err := h.tickets.Create(req)
 	if err != nil {
 		// Distinguish validation vs internal
-		if isValidationError(err) {
+		if ticketservice.IsValidationError(err) {
 			WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 			return
 		}
@@ -78,7 +79,7 @@ func (h *TicketHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	list, err := h.tickets.List(filter)
 	if err != nil {
-		if isValidationError(err) {
+		if ticketservice.IsValidationError(err) {
 			WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 			return
 		}
@@ -106,11 +107,11 @@ func (h *TicketHandler) GetDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	t, err := h.tickets.GetByTicketNumber(ticketNumber)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, ticketservice.ErrTicketNotFound) {
 			WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 			return
 		}
-		if isValidationError(err) {
+		if ticketservice.IsValidationError(err) {
 			WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 			return
 		}
@@ -157,15 +158,14 @@ func (h *TicketHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	t, err := h.tickets.UpdateStatus(ticketNumber, req.Status)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		switch {
+		case errors.Is(err, ticketservice.ErrTicketNotFound):
 			WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
-			return
-		}
-		if isValidationError(err) || strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "cannot transition") {
+		case errors.Is(err, ticketservice.ErrInvalidTransition) || ticketservice.IsValidationError(err):
 			WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
-			return
+		default:
+			WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update status")
 		}
-		WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update status")
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
@@ -174,9 +174,45 @@ func (h *TicketHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func isValidationError(err error) bool {
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "required") || strings.Contains(msg, "invalid") || strings.Contains(msg, "must") || strings.Contains(msg, "out of range") || strings.Contains(msg, "format")
+// UpdatePriority handles PATCH /api/tickets/:id/priority (staff only per USER ROLES.md)
+// Request: {priority: "LOW"|"MEDIUM"|"HIGH"}
+func (h *TicketHandler) UpdatePriority(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed")
+		return
+	}
+	ticketNumber := extractTicketID(r.URL.Path)
+	if ticketNumber == "" {
+		WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "ticket_number is required")
+		return
+	}
+	var req struct {
+		Priority string `json:"priority"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid JSON: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(req.Priority) == "" {
+		WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "priority is required")
+		return
+	}
+	t, err := h.tickets.UpdatePriority(ticketNumber, req.Priority)
+	if err != nil {
+		switch {
+		case errors.Is(err, ticketservice.ErrTicketNotFound):
+			WriteError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		case ticketservice.IsValidationError(err):
+			WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		default:
+			WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update priority")
+		}
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ticket_number": t.TicketNumber,
+		"priority":      t.Priority,
+	})
 }
 
 func extractTicketID(path string) string {
@@ -195,10 +231,5 @@ func extractTicketIDForStatus(path string) string {
 	// /api/tickets/TKT-000001/status -> TKT-000001
 	trim := strings.TrimPrefix(path, "/api/tickets/")
 	trim = strings.TrimSuffix(trim, "/status")
-	trim = strings.TrimSuffix(trim, "/")
-	// Remove trailing /status if still there
-	if strings.HasSuffix(path, "/status") {
-		// already handled
-	}
-	return trim
+	return strings.TrimSuffix(trim, "/")
 }

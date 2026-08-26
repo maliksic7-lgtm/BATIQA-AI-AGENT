@@ -54,13 +54,24 @@ func IsValidStatus(s string) bool {
 	return s == StatusOpen || s == StatusInProgress || s == StatusResolved || s == StatusCancelled
 }
 
-// IsValidStatusTransition validates allowed transitions (simple: any except RESOLVED->OPEN without CANCELLED)
+// IsValidStatusTransition validates allowed transitions per TICKET LIFECYCLE.md:
+// OPEN -> IN_PROGRESS -> RESOLVED (sequential); CANCELLED allowed from OPEN/IN_PROGRESS.
+// RESOLVED and CANCELLED are terminal. Same-status is a no-op (allowed).
 func IsValidStatusTransition(from, to string) bool {
 	if !IsValidStatus(from) || !IsValidStatus(to) {
 		return false
 	}
-	// Allow all transitions in Phase 2; stricter rules can be added later
-	return true
+	if from == to {
+		return true // no-op
+	}
+	switch from {
+	case StatusOpen:
+		return to == StatusInProgress || to == StatusCancelled
+	case StatusInProgress:
+		return to == StatusResolved || to == StatusCancelled
+	default:
+		return false // RESOLVED / CANCELLED terminal
+	}
 }
 
 // TicketFilter for GET /api/tickets?department=&status=&priority=

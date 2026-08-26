@@ -3,7 +3,10 @@ package router
 import (
 	"log"
 	"net/http"
+	"os"
 	"runtime/debug"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -43,12 +46,22 @@ func recoveryMiddleware(next http.Handler) http.Handler {
 }
 
 // corsMiddleware allows frontend (web/guest, web/staff) to call API.
-// Phase 1: permissive for development; tighten in production per SECURITY PRINCIPLES.md
+// Allowed origins come from CORS_ALLOWED_ORIGINS env (comma-separated).
+// "*" enables wildcard explicitly; default is localhost dev origins per SECURITY PRINCIPLES.md
 func corsMiddleware(next http.Handler) http.Handler {
+	allowed := corsAllowedOrigins()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			if allowed["*"] {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			} else if allowed[origin] {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Add("Vary", "Origin")
+			}
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -56,4 +69,25 @@ func corsMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+var (
+	corsOnce    sync.Once
+	corsOrigins map[string]bool
+)
+
+func corsAllowedOrigins() map[string]bool {
+	corsOnce.Do(func() {
+		raw := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
+		if raw == "" {
+			raw = "http://localhost:8080,http://localhost:3000,http://127.0.0.1:8080"
+		}
+		corsOrigins = map[string]bool{}
+		for _, o := range strings.Split(raw, ",") {
+			if o = strings.TrimSpace(o); o != "" {
+				corsOrigins[o] = true
+			}
+		}
+	})
+	return corsOrigins
 }

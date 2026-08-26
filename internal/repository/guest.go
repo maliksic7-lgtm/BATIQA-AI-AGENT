@@ -44,11 +44,14 @@ func (r *GuestRepository) Upsert(sessionID string, roomNumber *string, language 
 	if language == "" {
 		language = "id"
 	}
-	// Use INSERT ... ON DUPLICATE KEY UPDATE for MySQL
+	// Use INSERT ... ON DUPLICATE KEY UPDATE for MySQL.
+	// Never overwrite an existing room_number with NULL/empty (chat follow-ups may omit room).
 	query := `
 		INSERT INTO guests (session_id, room_number, language)
 		VALUES (?, ?, ?)
-		ON DUPLICATE KEY UPDATE room_number = VALUES(room_number), language = VALUES(language)
+		ON DUPLICATE KEY UPDATE
+			room_number = IF(VALUES(room_number) IS NULL OR VALUES(room_number) = '', room_number, VALUES(room_number)),
+			language = VALUES(language)
 	`
 	_, err := r.db.Exec(query, sessionID, roomNumber, language)
 	if err != nil {

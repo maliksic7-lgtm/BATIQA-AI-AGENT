@@ -1,11 +1,26 @@
-# Env & secrets
-.env
-*.env
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
 
-# Binaries
+# Build outputs
+.next/
+dist/
+build/
 bin/
-*.exe
-*.out
+*.egg-info/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
 # IDE
 .vscode/
@@ -17,11 +32,21 @@ bin/
 .DS_Store
 Thumbs.db
 
-# Go
-vendor/
-
 # Logs
 *.log
+run_test.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Temp
-tmp/
+# Testing
+coverage/
+.nyc_output/
+
+# Docker
+docker-compose.override.yml
+
+# Misc
+*.pem
+.vercel
+.netlify

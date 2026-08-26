@@ -10,7 +10,11 @@
   <div class="app">
     <aside class="sidebar" aria-label="Navigation">
       <div class="sidebar__brand">
-        <h1>BATIQA<span>OPERATIONS</span></h1>
+        <h1 style="display:flex; align-items:center; gap:10px; margin:0;">
+          <img src="https://www.batiqa.com/i/bhm-logo-sm.png" alt="BATIQA" style="height:28px; width:auto; filter:brightness(0) invert(1);" onerror="this.style.display='none'">
+          BATIQA<span>OPERATIONS</span>
+        </h1>
+        <div style="font-size:9px; letter-spacing:0.14em; opacity:0.6; margin-top:4px;">PEKANBARU • STAFF ONLY</div>
       </div>
       <nav class="sidebar__nav">
         <a href="/staff/" class="active" aria-current="page">◧ Dashboard</a>
@@ -111,7 +115,13 @@
         <div class="field"><label>Department</label><div class="value" id="mDept"></div></div>
         <div class="field"><label>Category</label><div class="value" id="mCat"></div></div>
         <div class="field"><label>Description</label><div class="value" id="mDesc"></div></div>
-        <div class="field"><label>Priority</label><div class="value" id="mPriority"></div></div>
+        <div class="field"><label>Priority</label>
+          <select id="mPriority" class="select select--full" aria-label="Update priority">
+            <option value="LOW">LOW</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="HIGH">HIGH</option>
+          </select>
+        </div>
         <div class="field"><label>Status</label>
           <select id="mStatus" class="select select--full" aria-label="Update status">
             <option value="OPEN">OPEN</option>
@@ -121,11 +131,17 @@
           </select>
         </div>
         <div class="field"><label>Created</label><div class="value" id="mCreated"></div></div>
+        <div class="field"><label>Assignment</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <div class="value" id="mAssign" style="flex:1;">—</div>
+            <button class="btn btn--ghost" id="assignBtn" style="width:auto; padding:6px 12px; font-size:12px;">Assign to Me</button>
+          </div>
+        </div>
         <div id="modalError" class="error" style="display:none;"></div>
       </div>
       <div class="modal__foot">
         <button class="btn--ghost btn" id="modalCancel" style="width:auto; padding:8px 16px;">Cancel</button>
-        <button class="btn" id="modalSave" style="width:auto; padding:8px 16px;">Update Status</button>
+        <button class="btn" id="modalSave" style="width:auto; padding:8px 16px;">Update Ticket</button>
       </div>
     </div>
   </div>

@@ -55,11 +55,12 @@ func NewServiceWithProvider(primary, fallback Provider) *Service {
 
 // Process is the main entry: transforms natural language to structured AIResult with validation.
 // It never panics; on provider failure returns controlled fallback (UNKNOWN + clarification).
-func (s *Service) Process(ctx context.Context, req Request) (*AIResult, error) {
-	// Recover from panic per "Jangan crash server"
+func (s *Service) Process(ctx context.Context, req Request) (result *AIResult, err error) {
+	// Recover from panic per ERROR FLOW.md: never crash, return safe fallback
 	defer func() {
 		if r := recover(); r != nil {
-			// will be handled by returning error, not crashing
+			result = fallbackResult(req, langFromReq(req))
+			err = fmt.Errorf("recovered from panic in AI provider %s: %v", s.primary.Name(), r)
 		}
 	}()
 

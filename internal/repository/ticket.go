@@ -263,12 +263,12 @@ type TicketStats struct {
 func (r *TicketRepository) GetStats() (*TicketStats, error) {
 	stats := &TicketStats{}
 	queries := map[string]*int{
-		`SELECT COUNT(*) FROM tickets`: &stats.Total,
+		`SELECT COUNT(*) FROM tickets`:                       &stats.Total,
 		`SELECT COUNT(*) FROM tickets WHERE status = 'OPEN'`: &stats.Open,
-		`SELECT COUNT(*) FROM tickets WHERE priority = 'HIGH' AND status != 'RESOLVED' AND status != 'CANCELLED'`: &stats.High,
+		`SELECT COUNT(*) FROM tickets WHERE priority = 'HIGH' AND status != 'RESOLVED' AND status != 'CANCELLED'`:           &stats.High,
 		`SELECT COUNT(*) FROM tickets WHERE department = 'HOUSEKEEPING' AND status != 'RESOLVED' AND status != 'CANCELLED'`: &stats.Housekeeping,
-		`SELECT COUNT(*) FROM tickets WHERE department = 'ENGINEERING' AND status != 'RESOLVED' AND status != 'CANCELLED'`: &stats.Engineering,
-		`SELECT COUNT(*) FROM tickets WHERE status = 'RESOLVED' AND DATE(resolved_at) = CURDATE()`: &stats.ResolvedToday,
+		`SELECT COUNT(*) FROM tickets WHERE department = 'ENGINEERING' AND status != 'RESOLVED' AND status != 'CANCELLED'`:  &stats.Engineering,
+		`SELECT COUNT(*) FROM tickets WHERE status = 'RESOLVED' AND DATE(resolved_at) = CURDATE()`:                          &stats.ResolvedToday,
 	}
 	for q, ptr := range queries {
 		if err := r.db.QueryRow(q).Scan(ptr); err != nil {

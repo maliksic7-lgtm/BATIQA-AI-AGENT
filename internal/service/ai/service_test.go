@@ -85,7 +85,7 @@ func TestEntityExtraction(t *testing.T) {
 func TestDepartmentRouting(t *testing.T) {
 	tests := []struct {
 		intent string
-		dept string
+		dept   string
 	}{
 		{IntentTowelRequest, "HOUSEKEEPING"},
 		{IntentACProblem, "ENGINEERING"},

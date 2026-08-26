@@ -2,7 +2,10 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"batiqa-ai/internal/model"
@@ -14,12 +17,14 @@ import (
 // ChatHandler handles POST /api/chat per AI CHAT.MD and USER_FLOW.md
 // Flow: Guest Message -> AI -> Structured AI Result -> Backend Validation -> Ticket Service -> Repository -> DB
 // For info intents, it retrieves verified hotel information from DB per AI KNOWLEDGE SOURCE.md
+// For recommendation intents, it retrieves verified local data from DB per RECOMMENDATION RULES.md
 type ChatHandler struct {
 	ai         *ai.Service
 	tickets    *ticketservice.Service
 	convs      *repository.ConversationRepository
 	guests     *repository.GuestRepository
 	hotelInfos *repository.HotelInfoRepository
+	recs       *repository.RecommendationRepository
 }
 
 func NewChatHandler(aiSvc *ai.Service, ticketSvc *ticketservice.Service, convRepo *repository.ConversationRepository, guestRepo *repository.GuestRepository) *ChatHandler {
@@ -28,6 +33,10 @@ func NewChatHandler(aiSvc *ai.Service, ticketSvc *ticketservice.Service, convRep
 
 func NewChatHandlerWithHotel(aiSvc *ai.Service, ticketSvc *ticketservice.Service, convRepo *repository.ConversationRepository, guestRepo *repository.GuestRepository, hotelRepo *repository.HotelInfoRepository) *ChatHandler {
 	return &ChatHandler{ai: aiSvc, tickets: ticketSvc, convs: convRepo, guests: guestRepo, hotelInfos: hotelRepo}
+}
+
+func NewChatHandlerFull(aiSvc *ai.Service, ticketSvc *ticketservice.Service, convRepo *repository.ConversationRepository, guestRepo *repository.GuestRepository, hotelRepo *repository.HotelInfoRepository, recRepo *repository.RecommendationRepository) *ChatHandler {
+	return &ChatHandler{ai: aiSvc, tickets: ticketSvc, convs: convRepo, guests: guestRepo, hotelInfos: hotelRepo, recs: recRepo}
 }
 
 // ChatRequest per AI CHAT.MD
@@ -39,9 +48,9 @@ type ChatRequest struct {
 
 // ChatResponse per AI CHAT.MD
 type ChatResponse struct {
-	Message        string `json:"message"`
-	Intent         string `json:"intent"`
-	RequiresTicket bool   `json:"requires_ticket"`
+	Message        string  `json:"message"`
+	Intent         string  `json:"intent"`
+	RequiresTicket bool    `json:"requires_ticket"`
 	TicketID       *string `json:"ticket_id"`
 }
 
@@ -72,18 +81,18 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist guest session (upsert) - room not invented
+	// Persist guest session (upsert) - room not invented.
+	// Non-fatal: guest table is auxiliary; never block the chat flow on it.
 	var roomPtr *string
 	if req.RoomNumber != "" {
 		roomPtr = &req.RoomNumber
 	}
-	// Language will be detected by AI
 	lang := ai.DetectLanguage(req.Message)
 	if _, err := h.guests.Upsert(req.SessionID, roomPtr, lang); err != nil {
-		// Non-fatal, log but continue (guest table is optional)
+		fmt.Printf("guest upsert failed (non-fatal): %v\n", err)
 	}
 
-	// Store user conversation
+	// Store user conversation (best effort)
 	_ = h.convs.Create(&model.Conversation{
 		SessionID: req.SessionID,
 		Role:      model.RoleUser,
@@ -98,15 +107,14 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Message:    req.Message,
 	}
 	aiResult, err := h.ai.Process(r.Context(), aiReq)
-	if err != nil {
-		if aiResult == nil {
-			aiResult = &ai.AIResult{
-				Intent:   ai.IntentUnknown,
-				Language: ai.LangID,
-				Entities: map[string]interface{}{},
-				Action:   ai.Action{Type: ai.ActionClarify},
-				Response: "Maaf, layanan AI sedang mengalami gangguan. Silakan coba kembali beberapa saat lagi.",
-			}
+	if err != nil || aiResult == nil {
+		// Defensive: Process guarantees non-nil result, but guard anyway per ERROR FLOW.md
+		aiResult = &ai.AIResult{
+			Intent:   ai.IntentUnknown,
+			Language: ai.LangID,
+			Entities: map[string]interface{}{},
+			Action:   ai.Action{Type: ai.ActionClarify},
+			Response: "Maaf, layanan AI sedang mengalami gangguan. Silakan coba kembali beberapa saat lagi.",
 		}
 	}
 
@@ -122,6 +130,11 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				aiResult.Response = "Maaf, saya belum memiliki informasi tersebut. Silakan hubungi Front Office."
 			}
 		}
+	}
+
+	// For recommendation intents, retrieve verified local data from DB per RECOMMENDATION RULES.md
+	if h.recs != nil && isRecommendationIntent(aiResult.Intent) && aiResult.Action.Type == ai.ActionAnswer {
+		h.enrichRecommendationResponse(aiResult)
 	}
 
 	// Store assistant conversation (best effort)
@@ -140,16 +153,13 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Check missing room_number: if not in entities and no provided room, do not create, ask for room
 		if _, ok := aiResult.Entities["room_number"]; !ok && req.RoomNumber == "" {
 			// Missing room flow per MISSING ROOM NUMBER.md
-			// Do not create ticket, keep requires_ticket true but ticket_id null, response already asks for room
-			// Ensure response is ask for room
 			requiresTicket = true
 			ticketID = nil
 		} else {
-				t, err := h.tickets.CreateFromAI(aiResult, req.Message)
+			t, err := h.tickets.CreateFromAI(aiResult, req.Message)
 			if err != nil {
-				// Distinguish validation vs internal DB error
-				lowerErr := strings.ToLower(err.Error())
-				if strings.Contains(lowerErr, "room_number is required") {
+				switch {
+				case errors.Is(err, ticketservice.ErrRoomRequired):
 					requiresTicket = true
 					ticketID = nil
 					if !strings.Contains(strings.ToLower(aiResult.Response), "kamar") && !strings.Contains(strings.ToLower(aiResult.Response), "room") {
@@ -159,12 +169,12 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							aiResult.Response = "Baik, saya bisa membantu. Boleh saya tahu nomor kamar Anda?"
 						}
 					}
-				} else if strings.Contains(lowerErr, "invalid") || strings.Contains(lowerErr, "required") || strings.Contains(lowerErr, "must") {
+				case ticketservice.IsValidationError(err):
 					// Validation error -> do not create ticket
 					requiresTicket = false
 					ticketID = nil
-				} else {
-					// Internal DB error (e.g., ticket create: ...) -> keep requires_ticket true but no ticket, inform guest of temporary failure
+				default:
+					// Internal DB error -> keep requires_ticket true but no ticket, inform guest of temporary failure
 					requiresTicket = true
 					ticketID = nil
 					if aiResult.Language == ai.LangEN {
@@ -179,8 +189,6 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
-	// Also persist ticket creation conversation if needed? Already done
 
 	resp := ChatResponse{
 		Message:        aiResult.Response,
@@ -200,6 +208,142 @@ func isInfoIntent(intent string) bool {
 	default:
 		return false
 	}
+}
+
+func isRecommendationIntent(intent string) bool {
+	switch intent {
+	case ai.IntentRestaurantRecommendation, ai.IntentCafeRecommendation, ai.IntentTourismRecommendation,
+		ai.IntentShoppingRecommendation, ai.IntentATMRequest, ai.IntentTransportationRequest:
+		return true
+	default:
+		return false
+	}
+}
+
+func recommendationCategory(intent string) string {
+	switch intent {
+	case ai.IntentRestaurantRecommendation:
+		return "restaurant"
+	case ai.IntentCafeRecommendation:
+		return "cafe"
+	case ai.IntentTourismRecommendation:
+		return "tourism"
+	case ai.IntentShoppingRecommendation:
+		return "shopping"
+	case ai.IntentATMRequest:
+		return "atm"
+	case ai.IntentTransportationRequest:
+		return "transportation"
+	default:
+		return ""
+	}
+}
+
+// enrichRecommendationResponse replaces the generic template with verified data from the
+// recommendations table (top 3 nearest). Never invents entries per RECOMMENDATION RULES.md.
+func (h *ChatHandler) enrichRecommendationResponse(res *ai.AIResult) {
+	cat := recommendationCategory(res.Intent)
+	if cat == "" {
+		return
+	}
+	var maxPrice *int
+	if v, ok := res.Entities["budget"]; ok {
+		if n := toInt(v); n > 0 {
+			maxPrice = &n
+		}
+	}
+	items, err := h.recs.ListActive(&cat, maxPrice)
+	if err != nil {
+		fmt.Printf("recommendation query failed (non-fatal): %v\n", err)
+		return
+	}
+	if len(items) == 0 {
+		if res.Language == ai.LangEN {
+			res.Response = "Sorry, I don't have recommendations for that yet. Please contact Front Office."
+		} else {
+			res.Response = "Maaf, saya belum punya rekomendasi untuk itu. Silakan hubungi Front Office."
+		}
+		return
+	}
+	if len(items) > 3 {
+		items = items[:3]
+	}
+	var b strings.Builder
+	if res.Language == ai.LangEN {
+		b.WriteString("Here are nearby recommendations:")
+	} else {
+		b.WriteString("Berikut rekomendasi terdekat untuk Anda:")
+	}
+	for _, it := range items {
+		b.WriteString("\n• ")
+		b.WriteString(it.Name)
+		if it.Description != nil && *it.Description != "" {
+			b.WriteString(" — ")
+			b.WriteString(*it.Description)
+		}
+		details := make([]string, 0, 2)
+		if price := formatPriceRange(it.PriceMin, it.PriceMax); price != "" {
+			details = append(details, price)
+		}
+		if it.DistanceKm != nil {
+			details = append(details, fmt.Sprintf("~%s km", trimFloat(*it.DistanceKm)))
+		}
+		if len(details) > 0 {
+			b.WriteString(" (")
+			b.WriteString(strings.Join(details, ", "))
+			b.WriteString(")")
+		}
+	}
+	res.Response = b.String()
+}
+
+func toInt(v interface{}) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	case string:
+		var out int
+		_, err := fmt.Sscanf(strings.TrimSpace(n), "%d", &out)
+		if err != nil {
+			return 0
+		}
+		return out
+	default:
+		return 0
+	}
+}
+
+func formatPriceRange(pMin, pMax *int) string {
+	switch {
+	case pMin != nil && pMax != nil && *pMax > 0:
+		return fmt.Sprintf("Rp%s–Rp%s", thousands(*pMin), thousands(*pMax))
+	case pMax != nil && *pMax > 0:
+		return fmt.Sprintf("≤ Rp%s", thousands(*pMax))
+	case pMin != nil && *pMin > 0:
+		return fmt.Sprintf("≥ Rp%s", thousands(*pMin))
+	default:
+		return ""
+	}
+}
+
+func thousands(n int) string {
+	s := strconv.Itoa(n)
+	var b strings.Builder
+	for i, d := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(d)
+	}
+	return b.String()
+}
+
+func trimFloat(f float64) string {
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.1f", f), "0"), ".")
 }
 
 func (h *ChatHandler) getHotelInfoResponse(intent, lang string) string {
@@ -231,6 +375,3 @@ func (h *ChatHandler) getHotelInfoResponse(intent, lang string) string {
 	}
 	return items[0].Content
 }
-
-
-

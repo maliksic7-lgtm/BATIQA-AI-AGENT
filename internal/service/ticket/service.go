@@ -33,31 +33,31 @@ type CreateRequest struct {
 // ValidateCreate ensures minimum data per REQUIRED TICKET DATA.md
 func ValidateCreate(req CreateRequest) error {
 	if strings.TrimSpace(req.RoomNumber) == "" {
-		return fmt.Errorf("room_number is required")
+		return ErrRoomRequired
 	}
 	if !isValidRoomNumber(req.RoomNumber) {
-		return fmt.Errorf("invalid room_number format: %s", req.RoomNumber)
+		return NewValidationError("invalid room_number format: %s", req.RoomNumber)
 	}
 	if strings.TrimSpace(req.Department) == "" {
-		return fmt.Errorf("department is required")
+		return NewValidationError("department is required")
 	}
-	if !model.IsValidDepartment(strings.ToUpper(req.Department)) {
-		return fmt.Errorf("invalid department: %s", req.Department)
+	if !model.IsValidDepartment(normalizeEnum(req.Department)) {
+		return NewValidationError("invalid department: %s", req.Department)
 	}
 	if strings.TrimSpace(req.Category) == "" {
-		return fmt.Errorf("category is required")
+		return NewValidationError("category is required")
 	}
-	if !ai.IsValidIntent(strings.ToUpper(req.Category)) {
-		return fmt.Errorf("invalid category (intent): %s", req.Category)
+	if !ai.IsValidIntent(normalizeEnum(req.Category)) {
+		return NewValidationError("invalid category (intent): %s", req.Category)
 	}
 	if strings.TrimSpace(req.Description) == "" {
-		return fmt.Errorf("description is required")
+		return NewValidationError("description is required")
 	}
 	if strings.TrimSpace(req.Priority) == "" {
-		return fmt.Errorf("priority is required")
+		return NewValidationError("priority is required")
 	}
-	if !model.IsValidPriority(strings.ToUpper(req.Priority)) {
-		return fmt.Errorf("invalid priority: %s", req.Priority)
+	if !model.IsValidPriority(normalizeEnum(req.Priority)) {
+		return NewValidationError("invalid priority: %s", req.Priority)
 	}
 	return nil
 }
@@ -143,7 +143,7 @@ func (s *Service) CreateFromAI(aiResult *ai.AIResult, originalMessage string) (*
 		}
 	}
 	if room == "" {
-		return nil, fmt.Errorf("room_number is required")
+		return nil, ErrRoomRequired
 	}
 	dept := strings.ToUpper(aiResult.Action.Department)
 	priority := strings.ToUpper(aiResult.Action.Priority)
@@ -196,23 +196,23 @@ func buildDescription(aiResult *ai.AIResult, originalMessage string) string {
 func (s *Service) List(filter model.TicketFilter) ([]*model.Ticket, error) {
 	// Validate filter enums if set
 	if filter.Department != nil && *filter.Department != "" {
-		dept := strings.ToUpper(*filter.Department)
+		dept := normalizeEnum(*filter.Department)
 		if !model.IsValidDepartment(dept) {
-			return nil, fmt.Errorf("invalid department filter: %s", *filter.Department)
+			return nil, NewValidationError("invalid department filter: %s", *filter.Department)
 		}
 		filter.Department = &dept
 	}
 	if filter.Status != nil && *filter.Status != "" {
-		st := strings.ToUpper(*filter.Status)
+		st := normalizeEnum(*filter.Status)
 		if !model.IsValidStatus(st) {
-			return nil, fmt.Errorf("invalid status filter: %s", *filter.Status)
+			return nil, NewValidationError("invalid status filter: %s", *filter.Status)
 		}
 		filter.Status = &st
 	}
 	if filter.Priority != nil && *filter.Priority != "" {
-		p := strings.ToUpper(*filter.Priority)
+		p := normalizeEnum(*filter.Priority)
 		if !model.IsValidPriority(p) {
-			return nil, fmt.Errorf("invalid priority filter: %s", *filter.Priority)
+			return nil, NewValidationError("invalid priority filter: %s", *filter.Priority)
 		}
 		filter.Priority = &p
 	}
@@ -222,50 +222,46 @@ func (s *Service) List(filter model.TicketFilter) ([]*model.Ticket, error) {
 // GetByTicketNumber returns ticket detail per GET TICKETS DETAIL.MD
 func (s *Service) GetByTicketNumber(ticketNumber string) (*model.Ticket, error) {
 	if strings.TrimSpace(ticketNumber) == "" {
-		return nil, fmt.Errorf("ticket_number is required")
+		return nil, NewValidationError("ticket_number is required")
 	}
 	t, err := s.tickets.FindByTicketNumber(strings.TrimSpace(ticketNumber))
 	if err != nil {
 		return nil, err
 	}
 	if t == nil {
-		return nil, fmt.Errorf("ticket not found: %s", ticketNumber)
+		return nil, fmt.Errorf("%w: %s", ErrTicketNotFound, ticketNumber)
 	}
 	return t, nil
 }
 
 // UpdateStatus validates transition OPEN->IN_PROGRESS->RESOLVED, optional CANCELLED per TICKET LIFECYCLE.md
 func (s *Service) UpdateStatus(ticketNumber, newStatus string) (*model.Ticket, error) {
-	newStatus = strings.ToUpper(strings.TrimSpace(newStatus))
+	newStatus = normalizeEnum(newStatus)
 	if !model.IsValidStatus(newStatus) {
-		return nil, fmt.Errorf("invalid status: %s", newStatus)
+		return nil, NewValidationError("invalid status: %s", newStatus)
 	}
 	// Ensure ticket exists and transition is valid
 	current, err := s.GetByTicketNumber(ticketNumber)
 	if err != nil {
 		return nil, err
 	}
-	// Validate transition: RESOLVED/CANCELLED are terminal (no outgoing), per TICKET LIFECYCLE.md
-	if current.Status == model.StatusResolved || current.Status == model.StatusCancelled {
-		if newStatus != current.Status {
-			return nil, fmt.Errorf("cannot transition from %s to %s", current.Status, newStatus)
-		}
+	if current.Status == newStatus {
+		// No-op transition (e.g., OPEN -> OPEN)
 		return current, nil
 	}
-	if current.Status == model.StatusOpen && newStatus == model.StatusOpen {
-		return current, nil
+	if !model.IsValidStatusTransition(current.Status, newStatus) {
+		return nil, fmt.Errorf("%w: cannot transition from %s to %s", ErrInvalidTransition, current.Status, newStatus)
 	}
 	return s.tickets.UpdateStatus(ticketNumber, newStatus)
 }
 
-// UpdatePriority validates and updates priority
+// UpdatePriority validates and updates priority (staff action per USER ROLES.md)
 func (s *Service) UpdatePriority(ticketNumber, newPriority string) (*model.Ticket, error) {
-	newPriority = strings.ToUpper(strings.TrimSpace(newPriority))
+	newPriority = normalizeEnum(newPriority)
 	if !model.IsValidPriority(newPriority) {
-		return nil, fmt.Errorf("invalid priority: %s", newPriority)
+		return nil, NewValidationError("invalid priority: %s", newPriority)
 	}
-	_, err := s.GetByTicketNumber(ticketNumber)
-	if err != nil {
+	if _, err := s.GetByTicketNumber(ticketNumber); err != nil {
 		return nil, err
 	}
 	return s.tickets.UpdatePriority(ticketNumber, newPriority)

@@ -51,8 +51,8 @@ func (g *GeminiProvider) Generate(ctx context.Context, req Request) (*RawAIOutpu
 			{"parts": []map[string]interface{}{{"text": prompt}}},
 		},
 		"generationConfig": map[string]interface{}{
-			"temperature":     0.2,
-			"maxOutputTokens": 512,
+			"temperature":      0.2,
+			"maxOutputTokens":  512,
 			"responseMimeType": "application/json",
 		},
 	}

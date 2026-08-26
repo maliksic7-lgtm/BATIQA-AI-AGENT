@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -10,30 +11,31 @@ import (
 // Config holds all environment-based configuration.
 // Phase 2 adds MySQL database settings.
 type Config struct {
-	Port      string
-	Env       string
-	LogLevel  string
-	DBDSN     string
-	GeminiKey string
-	DBMaxOpen int
-	DBMaxIdle int
+	Port               string
+	Env                string
+	LogLevel           string
+	DBDSN              string
+	GeminiKey          string
+	DBMaxOpen          int
+	DBMaxIdle          int
+	CORSAllowedOrigins []string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
-// It also attempts to load a .env file from project root if present (simple parser, no external dep).
+// It also attempts to load a .env file by walking up from the working directory (simple parser, no external dep).
 func Load() *Config {
 	// Try to load .env file silently (best-effort, no error if missing)
-	_ = loadDotEnv(".env")
-	_ = loadDotEnv("C:\\Users\\Thin 15\\BATIQA-AI\\.env")
+	loadDotEnvUpward(".env")
 
 	cfg := &Config{
-		Port:      envOrDefault("PORT", "8080"),
-		Env:       envOrDefault("ENV", "development"),
-		LogLevel:  envOrDefault("LOG_LEVEL", "info"),
-		DBDSN:     os.Getenv("DB_DSN"),
-		GeminiKey: os.Getenv("GEMINI_API_KEY"),
-		DBMaxOpen: envIntOrDefault("DB_MAX_OPEN_CONNS", 25),
-		DBMaxIdle: envIntOrDefault("DB_MAX_IDLE_CONNS", 5),
+		Port:               envOrDefault("PORT", "8080"),
+		Env:                envOrDefault("ENV", "development"),
+		LogLevel:           envOrDefault("LOG_LEVEL", "info"),
+		DBDSN:              os.Getenv("DB_DSN"),
+		GeminiKey:          os.Getenv("GEMINI_API_KEY"),
+		DBMaxOpen:          envIntOrDefault("DB_MAX_OPEN_CONNS", 25),
+		DBMaxIdle:          envIntOrDefault("DB_MAX_IDLE_CONNS", 5),
+		CORSAllowedOrigins: parseOrigins(os.Getenv("CORS_ALLOWED_ORIGINS")),
 	}
 	// Default DBDSN for local dev only if not set (empty password, not hardcoded secret)
 	if cfg.DBDSN == "" {
@@ -72,6 +74,42 @@ func (c *Config) Addr() string {
 		return c.Port
 	}
 	return ":" + c.Port
+}
+
+// parseOrigins splits a comma-separated origin list. Empty -> localhost defaults.
+func parseOrigins(v string) []string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return []string{"http://localhost:8080", "http://localhost:3000", "http://127.0.0.1:8080"}
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// loadDotEnvUpward walks up from the working directory (max 4 levels) to find the .env file.
+func loadDotEnvUpward(name string) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	for i := 0; i < 5; i++ {
+		path := filepath.Join(dir, name)
+		if _, err := os.Stat(path); err == nil {
+			_ = loadDotEnv(path)
+			return
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return
+		}
+		dir = parent
+	}
 }
 
 // loadDotEnv is a minimal .env parser without external dependencies.

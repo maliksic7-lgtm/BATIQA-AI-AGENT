@@ -31,9 +31,12 @@
   const modalCancel = document.getElementById('modalCancel');
   const modalSave = document.getElementById('modalSave');
   const modalError = document.getElementById('modalError');
+  const assignBtn = document.getElementById('assignBtn');
+  const mAssign = document.getElementById('mAssign');
 
   let currentTicket = null;
   let ticketsCache = [];
+  let myStaffId = null;
 
   function authHeaders(){
     return { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
@@ -46,6 +49,7 @@
       const data = await res.json();
       staffInfo.textContent = data.name + ' • ' + data.department;
       deptBadge.textContent = data.department;
+      myStaffId = data.id;
       // Pre-select dept filter to staff department for operational focus, but allow all
       // For ADMIN, show all
       if(data.department !== 'ADMIN' && !deptFilter.value){
@@ -158,32 +162,85 @@
     document.getElementById('mDept').textContent = t.department;
     document.getElementById('mCat').textContent = t.category;
     document.getElementById('mDesc').textContent = t.description;
-    document.getElementById('mPriority').innerHTML = `<span class="priority priority--${t.priority}">${t.priority}</span>`;
+    document.getElementById('mPriority').value = t.priority;
     document.getElementById('mCreated').textContent = fmtDate(t.created_at);
     document.getElementById('mStatus').value = t.status;
+    mAssign.textContent = '—';
+    loadAssignments(t.ticket_number);
     modalError.style.display='none';
     modal.classList.add('open');
   }
   function closeModal(){ modal.classList.remove('open'); currentTicket=null; }
 
-  async function saveStatus(){
+  async function loadAssignments(ticketNumber){
+    try{
+      const res = await fetch('/api/tickets/' + encodeURIComponent(ticketNumber) + '/assignments');
+      if(!res.ok) throw new Error();
+      const data = await res.json();
+      const list = data.assignments || [];
+      mAssign.textContent = list.length ? ('Staff #' + list.map(a=>a.staff_id).join(', #')) : 'Unassigned';
+    }catch(e){
+      mAssign.textContent = '—';
+    }
+  }
+
+  async function assignToMe(){
+    if(!currentTicket) return;
+    if(!myStaffId){
+      modalError.textContent = 'Staff ID not available, please re-login.';
+      modalError.style.display = 'block';
+      return;
+    }
+    assignBtn.disabled = true;
+    modalError.style.display='none';
+    try{
+      const res = await fetch('/api/tickets/' + encodeURIComponent(currentTicket.ticket_number) + '/assign', {
+        method:'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({staff_id: myStaffId})
+      });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(data?.error?.message||'Failed to assign');
+      await loadAssignments(currentTicket.ticket_number);
+    }catch(e){
+      modalError.textContent = e.message;
+      modalError.style.display = 'block';
+    }finally{
+      assignBtn.disabled = false;
+    }
+  }
+
+  async function saveTicket(){
     if(!currentTicket) return;
     const newStatus = document.getElementById('mStatus').value;
-    if(newStatus===currentTicket.status){
+    const newPriority = document.getElementById('mPriority').value;
+    const statusChanged = newStatus !== currentTicket.status;
+    const priorityChanged = newPriority !== currentTicket.priority;
+    if(!statusChanged && !priorityChanged){
       closeModal(); return;
     }
     modalSave.disabled=true;
     modalSave.textContent='Updating...';
     modalError.style.display='none';
     try{
-      const res = await fetch('/api/tickets/' + encodeURIComponent(currentTicket.ticket_number) + '/status', {
-        method:'PATCH',
-        headers: authHeaders(),
-        body: JSON.stringify({status: newStatus})
-      });
-      const data = await res.json().catch(()=>({}));
-      if(!res.ok){
-        throw new Error(data?.error?.message||'Failed to update');
+      // Sequential: status first (transition validation), then priority
+      if(statusChanged){
+        const res = await fetch('/api/tickets/' + encodeURIComponent(currentTicket.ticket_number) + '/status', {
+          method:'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({status: newStatus})
+        });
+        const data = await res.json().catch(()=>({}));
+        if(!res.ok) throw new Error(data?.error?.message||'Failed to update status');
+      }
+      if(priorityChanged){
+        const res2 = await fetch('/api/tickets/' + encodeURIComponent(currentTicket.ticket_number) + '/priority', {
+          method:'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({priority: newPriority})
+        });
+        const data2 = await res2.json().catch(()=>({}));
+        if(!res2.ok) throw new Error(data2?.error?.message||'Failed to update priority');
       }
       // Success - close and reload
       closeModal();
@@ -194,7 +251,7 @@
       modalError.style.display='block';
     }finally{
       modalSave.disabled=false;
-      modalSave.textContent='Update Status';
+      modalSave.textContent='Update Ticket';
     }
   }
 
@@ -209,7 +266,8 @@
   priorityFilter.addEventListener('change', loadTickets);
   modalClose.addEventListener('click', closeModal);
   modalCancel.addEventListener('click', closeModal);
-  modalSave.addEventListener('click', saveStatus);
+  modalSave.addEventListener('click', saveTicket);
+  assignBtn.addEventListener('click', assignToMe);
   modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
   document.getElementById('logoutBtn').addEventListener('click', async (e)=>{
     e.preventDefault();

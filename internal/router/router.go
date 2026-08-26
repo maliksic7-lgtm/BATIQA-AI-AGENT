@@ -60,11 +60,14 @@ func NewWithDB(db *sql.DB) http.Handler {
 
 		// Handlers
 		ticketHandler := handler.NewTicketHandler(ticketSvc)
-		chatHandler := handler.NewChatHandlerWithHotel(aiSvc, ticketSvc, convRepo, guestRepo, hotelRepo)
+		chatHandler := handler.NewChatHandlerFull(aiSvc, ticketSvc, convRepo, guestRepo, hotelRepo, recRepo)
 		hotelHandler := handler.NewHotelHandler(hotelRepo)
 		recHandler := handler.NewRecommendationHandler(recRepo)
 		staffAuthHandler := handler.NewStaffAuthHandler(repository.NewStaffRepository(db))
 		statsHandler := handler.NewStatsHandler(ticketRepo)
+		staffRepo := repository.NewStaffRepository(db)
+		assignHandler := handler.NewAssignHandler(ticketSvc, staffRepo, repository.NewAssignmentRepository(db))
+		convHandler := handler.NewConversationHandler(convRepo)
 
 		// Staff auth: POST /api/staff/login (public), GET /api/staff/me, POST /api/staff/logout (auth)
 		mux.HandleFunc("/api/staff/login", staffAuthHandler.Login)
@@ -76,6 +79,9 @@ func NewWithDB(db *sql.DB) http.Handler {
 
 		// Chat: POST /api/chat
 		mux.HandleFunc("/api/chat", chatHandler.ServeHTTP)
+
+		// Chat history: GET /api/conversations?session_id=
+		mux.HandleFunc("/api/conversations", convHandler.ServeHTTP)
 
 		// Hotel info: GET /api/hotel-info
 		mux.HandleFunc("/api/hotel-info", hotelHandler.ServeHTTP)
@@ -96,26 +102,39 @@ func NewWithDB(db *sql.DB) http.Handler {
 			}
 		})
 
-		// Tickets detail and status: /api/tickets/{id} and /api/tickets/{id}/status (status requires staff auth)
+		// Tickets detail and sub-resources: /api/tickets/{id}, /{id}/status (auth),
+		// /{id}/priority (auth), /{id}/assign + /{id}/assignments (auth for POST)
 		mux.HandleFunc("/api/tickets/", func(w http.ResponseWriter, r *http.Request) {
 			path := r.URL.Path
-			if strings.HasSuffix(path, "/status") {
+			switch {
+			case strings.HasSuffix(path, "/status"):
 				// Require staff auth for status update
 				handler.AuthMiddleware(http.HandlerFunc(ticketHandler.UpdateStatus)).ServeHTTP(w, r)
-				return
-			}
-			if r.Method == http.MethodGet {
+			case strings.HasSuffix(path, "/priority"):
+				// Require staff auth for priority update per USER ROLES.md
+				handler.AuthMiddleware(http.HandlerFunc(ticketHandler.UpdatePriority)).ServeHTTP(w, r)
+			case strings.HasSuffix(path, "/assign") || strings.HasSuffix(path, "/assignments"):
+				if r.Method == http.MethodPost || r.Method == http.MethodDelete {
+					handler.AuthMiddleware(http.HandlerFunc(assignHandler.ServeHTTP)).ServeHTTP(w, r)
+					return
+				}
+				assignHandler.ServeHTTP(w, r)
+			case r.Method == http.MethodGet:
 				ticketHandler.GetDetail(w, r)
-				return
+			default:
+				handler.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed")
 			}
-			handler.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed")
 		})
 	}
 
 	// Wrapped handler: API routes via mux, static files for frontend, 503 if DB nil
 	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// API routes via mux
-		apiPrefixes := []string{"/api/health", "/api/chat", "/api/tickets", "/api/hotel-info", "/api/hotel_info", "/api/recommendations", "/api/staff/login", "/api/staff/me", "/api/staff/logout", "/api/tickets/stats"}
+		apiPrefixes := []string{
+			"/api/health", "/api/chat", "/api/conversations", "/api/tickets",
+			"/api/hotel-info", "/api/hotel_info", "/api/recommendations",
+			"/api/staff/login", "/api/staff/me", "/api/staff/logout",
+		}
 		for _, p := range apiPrefixes {
 			if r.URL.Path == p || strings.HasPrefix(r.URL.Path, p+"/") {
 				// DB required for all except health
@@ -126,15 +145,6 @@ func NewWithDB(db *sql.DB) http.Handler {
 				mux.ServeHTTP(w, r)
 				return
 			}
-		}
-		// Direct api tickets prefix also
-		if strings.HasPrefix(r.URL.Path, "/api/tickets") || r.URL.Path == "/api/tickets" {
-			if db == nil {
-				handler.WriteError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Database not available")
-				return
-			}
-			mux.ServeHTTP(w, r)
-			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			handler.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Endpoint not found")

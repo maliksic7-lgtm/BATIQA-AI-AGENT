@@ -16,12 +16,12 @@ func NewStatsHandler(repo *repository.TicketRepository) *StatsHandler {
 }
 
 type StatsResponse struct {
-	TotalOpen      int `json:"total_open"`
-	HighPriority   int `json:"high_priority"`
-	Housekeeping   int `json:"housekeeping"`
-	Engineering    int `json:"engineering"`
-	ResolvedToday  int `json:"resolved_today"`
-	TotalTickets   int `json:"total_tickets"`
+	TotalOpen     int `json:"total_open"`
+	HighPriority  int `json:"high_priority"`
+	Housekeeping  int `json:"housekeeping"`
+	Engineering   int `json:"engineering"`
+	ResolvedToday int `json:"resolved_today"`
+	TotalTickets  int `json:"total_tickets"`
 }
 
 func (h *StatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

@@ -132,4 +132,23 @@
 
   // Accessibility: focus input on load (mobile will show keyboard, so delay)
   setTimeout(()=>{ if(window.innerWidth>480) input.focus(); }, 300);
+
+  // Restore chat history from server (guest may reload the page or re-scan QR)
+  (async function restoreHistory(){
+    if(!session) return;
+    try{
+      const res = await fetch('/api/conversations?session_id=' + encodeURIComponent(session) + '&limit=50');
+      if(!res.ok) return;
+      const data = await res.json();
+      const msgs = data.messages || [];
+      if(!msgs.length) return;
+      messagesEl.innerHTML='';
+      msgs.forEach(m=>{
+        addBubble(m.message, m.role==='user' ? 'user' : 'ai', null, m.intent);
+      });
+    }catch(e){
+      // History is best-effort; never block new chat
+      console.warn('history unavailable');
+    }
+  })();
 })();

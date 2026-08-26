@@ -96,7 +96,7 @@ func ExtractEntities(message, providedRoom string) map[string]interface{} {
 		"cafe": "cafe", "kafe": "cafe", "kopi": "cafe",
 		"mall": "shopping", "belanja": "shopping", "shopping": "shopping",
 		"wisata": "tourism", "tourism": "tourism", "pantai": "tourism", "candi": "tourism",
-		"atm": "atm",
+		"atm":       "atm",
 		"transport": "transportation", "taksi": "transportation", "ojek": "transportation",
 	}
 	for k, v := range catKeywords {

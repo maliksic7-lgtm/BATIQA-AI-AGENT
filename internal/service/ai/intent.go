@@ -22,14 +22,14 @@ const (
 	IntentRoomCleaningRequest = "ROOM_CLEANING_REQUEST"
 
 	// Engineering -> ENGINEERING
-	IntentACProblem             = "AC_PROBLEM"
-	IntentTVProblem             = "TV_PROBLEM"
-	IntentWifiProblem           = "WIFI_PROBLEM"
-	IntentLightProblem          = "LIGHT_PROBLEM"
-	IntentShowerProblem         = "SHOWER_PROBLEM"
-	IntentPlumbingProblem       = "PLUMBING_PROBLEM"
-	IntentRoomEquipmentProblem  = "ROOM_EQUIPMENT_PROBLEM"
-	IntentGeneralMaintenance    = "GENERAL_MAINTENANCE"
+	IntentACProblem            = "AC_PROBLEM"
+	IntentTVProblem            = "TV_PROBLEM"
+	IntentWifiProblem          = "WIFI_PROBLEM"
+	IntentLightProblem         = "LIGHT_PROBLEM"
+	IntentShowerProblem        = "SHOWER_PROBLEM"
+	IntentPlumbingProblem      = "PLUMBING_PROBLEM"
+	IntentRoomEquipmentProblem = "ROOM_EQUIPMENT_PROBLEM"
+	IntentGeneralMaintenance   = "GENERAL_MAINTENANCE"
 
 	// Recommendations (no ticket)
 	IntentRestaurantRecommendation = "RESTAURANT_RECOMMENDATION"
@@ -61,34 +61,34 @@ var ValidIntents = map[string]bool{
 
 // DepartmentRouting per TICKET ROUTING.md
 var DepartmentRouting = map[string]string{
-	IntentHousekeepingRequest: "HOUSEKEEPING",
-	IntentTowelRequest:        "HOUSEKEEPING",
-	IntentAmenityRequest:      "HOUSEKEEPING",
-	IntentRoomCleaningRequest: "HOUSEKEEPING",
-	IntentACProblem:           "ENGINEERING",
-	IntentTVProblem:           "ENGINEERING",
-	IntentWifiProblem:         "ENGINEERING",
-	IntentLightProblem:        "ENGINEERING",
-	IntentShowerProblem:       "ENGINEERING",
-	IntentPlumbingProblem:     "ENGINEERING",
+	IntentHousekeepingRequest:  "HOUSEKEEPING",
+	IntentTowelRequest:         "HOUSEKEEPING",
+	IntentAmenityRequest:       "HOUSEKEEPING",
+	IntentRoomCleaningRequest:  "HOUSEKEEPING",
+	IntentACProblem:            "ENGINEERING",
+	IntentTVProblem:            "ENGINEERING",
+	IntentWifiProblem:          "ENGINEERING",
+	IntentLightProblem:         "ENGINEERING",
+	IntentShowerProblem:        "ENGINEERING",
+	IntentPlumbingProblem:      "ENGINEERING",
 	IntentRoomEquipmentProblem: "ENGINEERING",
-	IntentGeneralMaintenance:  "ENGINEERING",
+	IntentGeneralMaintenance:   "ENGINEERING",
 }
 
 // PriorityMapping per PRIORITY CLASSIFICATION.md
 var PriorityMapping = map[string]string{
-	IntentTowelRequest:        "MEDIUM",
-	IntentHousekeepingRequest: "MEDIUM",
-	IntentAmenityRequest:      "LOW",
-	IntentRoomCleaningRequest: "MEDIUM",
-	IntentACProblem:           "HIGH",
-	IntentTVProblem:           "MEDIUM",
-	IntentWifiProblem:         "MEDIUM",
-	IntentLightProblem:        "MEDIUM",
-	IntentShowerProblem:       "HIGH",
-	IntentPlumbingProblem:     "HIGH",
+	IntentTowelRequest:         "MEDIUM",
+	IntentHousekeepingRequest:  "MEDIUM",
+	IntentAmenityRequest:       "LOW",
+	IntentRoomCleaningRequest:  "MEDIUM",
+	IntentACProblem:            "HIGH",
+	IntentTVProblem:            "MEDIUM",
+	IntentWifiProblem:          "MEDIUM",
+	IntentLightProblem:         "MEDIUM",
+	IntentShowerProblem:        "HIGH",
+	IntentPlumbingProblem:      "HIGH",
 	IntentRoomEquipmentProblem: "MEDIUM",
-	IntentGeneralMaintenance:  "MEDIUM",
+	IntentGeneralMaintenance:   "MEDIUM",
 }
 
 // RequiresTicket intents

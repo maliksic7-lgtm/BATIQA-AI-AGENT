@@ -8,7 +8,7 @@ type FailingProvider struct {
 }
 
 func NewFailingProvider() *FailingProvider { return &FailingProvider{name: "failing"} }
-func (f *FailingProvider) Name() string { return f.name }
+func (f *FailingProvider) Name() string    { return f.name }
 func (f *FailingProvider) Generate(ctx context.Context, req Request) (*RawAIOutput, error) {
 	return nil, &ProviderError{Provider: f.name, Err: context.DeadlineExceeded}
 }
@@ -19,7 +19,7 @@ type MalformedProvider struct {
 }
 
 func NewMalformedProvider(raw *RawAIOutput) *MalformedProvider { return &MalformedProvider{raw: raw} }
-func (m *MalformedProvider) Name() string { return "malformed" }
+func (m *MalformedProvider) Name() string                      { return "malformed" }
 func (m *MalformedProvider) Generate(ctx context.Context, req Request) (*RawAIOutput, error) {
 	return m.raw, nil
 }

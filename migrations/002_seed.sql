@@ -27,10 +27,10 @@ INSERT INTO recommendations (name, category, description, price_min, price_max, 
 ('ATM BCA Terdekat', 'atm', 'ATM 24 jam 200m dari lobby', 0, 0, 0.2, 'Lobby BATIQA', TRUE)
 ON DUPLICATE KEY UPDATE name=VALUES(name);
 
--- Demo staff (password_hash is bcrypt placeholder, not real password; for Phase 6 auth)
--- Password for all: "password123" hashed with bcrypt cost 10 (example hash, replace before production)
+-- Demo staff accounts (bcrypt hash of password "batiqa123", cost 10)
+-- DEMO ONLY: rotate credentials before production per SECURITY PRINCIPLES.md
 INSERT INTO staff (name, email, password_hash, department) VALUES
-('Admin BATIQA', 'admin@batiqa.com', '$2a$10$examplehashadminplaceholder123456789012345678901234567890', 'ADMIN'),
-('Housekeeping Team', 'hk@batiqa.com', '$2a$10$examplehashhkplaceholder12345678901234567890123456789012', 'HOUSEKEEPING'),
-('Engineering Team', 'eng@batiqa.com', '$2a$10$examplehashengplaceholder1234567890123456789012345678901', 'ENGINEERING')
+('Admin BATIQA', 'admin@batiqa.com', '$2a$10$WnP6TcAxzfFXrLBRKgoLWOgwNLEf7x9iGkuhmSO34kfBqyhsTRHCa', 'ADMIN'),
+('Housekeeping Team', 'hk@batiqa.com', '$2a$10$WnP6TcAxzfFXrLBRKgoLWOgwNLEf7x9iGkuhmSO34kfBqyhsTRHCa', 'HOUSEKEEPING'),
+('Engineering Team', 'eng@batiqa.com', '$2a$10$WnP6TcAxzfFXrLBRKgoLWOgwNLEf7x9iGkuhmSO34kfBqyhsTRHCa', 'ENGINEERING')
 ON DUPLICATE KEY UPDATE name=VALUES(name);

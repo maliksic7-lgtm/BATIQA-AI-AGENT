@@ -143,11 +143,11 @@ func TestCreateFromAI(t *testing.T) {
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	aiResult := &ai.AIResult{
-		Intent:   ai.IntentTowelRequest,
-		Language: ai.LangID,
-		Entities: map[string]interface{}{"room_number": "305", "quantity": 2, "item": "towel"},
-		Action:   ai.Action{Type: ai.ActionCreateTicket, Department: "HOUSEKEEPING", Priority: "MEDIUM"},
-		Response: "Baik",
+		Intent:         ai.IntentTowelRequest,
+		Language:       ai.LangID,
+		Entities:       map[string]interface{}{"room_number": "305", "quantity": 2, "item": "towel"},
+		Action:         ai.Action{Type: ai.ActionCreateTicket, Department: "HOUSEKEEPING", Priority: "MEDIUM"},
+		Response:       "Baik",
 		RequiresTicket: true,
 	}
 	ticket, err := svc.CreateFromAI(aiResult, "Tolong antar 2 handuk")
@@ -165,11 +165,11 @@ func TestCreateFromAIMissingRoom(t *testing.T) {
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	aiResult := &ai.AIResult{
-		Intent:   ai.IntentACProblem,
-		Language: ai.LangID,
-		Entities: map[string]interface{}{"problem": "AC tidak dingin"},
-		Action:   ai.Action{Type: ai.ActionCreateTicket, Department: "ENGINEERING", Priority: "HIGH"},
-		Response: "Boleh tahu kamar?",
+		Intent:         ai.IntentACProblem,
+		Language:       ai.LangID,
+		Entities:       map[string]interface{}{"problem": "AC tidak dingin"},
+		Action:         ai.Action{Type: ai.ActionCreateTicket, Department: "ENGINEERING", Priority: "HIGH"},
+		Response:       "Boleh tahu kamar?",
 		RequiresTicket: true,
 	}
 	_, err := svc.CreateFromAI(aiResult, "AC tidak dingin")
