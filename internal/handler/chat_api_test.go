@@ -2,8 +2,10 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"batiqa-ai/internal/config"
@@ -15,24 +17,28 @@ import (
 func setupChatHandler(t *testing.T) (*ChatHandler, func()) {
 	t.Helper()
 	cfg := config.Load()
-	db, err := config.OpenDB(cfg)
+	cfg.MongoDB = testDBName(t)
+	db, closeDB, err := config.ConnectMongo(cfg)
 	if err != nil {
-		t.Skipf("DB not available: %v", err)
+		t.Skipf("MongoDB not available: %v", err)
 	}
-	db.Exec("SET FOREIGN_KEY_CHECKS=0")
-	db.Exec("TRUNCATE TABLE ticket_assignments")
-	db.Exec("TRUNCATE TABLE tickets")
-	db.Exec("TRUNCATE TABLE conversations")
-	db.Exec("TRUNCATE TABLE guests")
-	db.Exec("SET FOREIGN_KEY_CHECKS=1")
-
 	ticketRepo := repository.NewTicketRepository(db)
 	guestRepo := repository.NewGuestRepository(db)
 	convRepo := repository.NewConversationRepository(db)
 	aiSvc := ai.NewServiceWithProvider(ai.NewMockProvider(), ai.NewMockProvider())
 	ticketSvc := ticketservice.NewService(ticketRepo, guestRepo)
 	h := NewChatHandler(aiSvc, ticketSvc, convRepo, guestRepo)
-	return h, func() { db.Close() }
+	cleanup := func() {
+		_ = db.Drop(context.Background())
+		closeDB()
+	}
+	return h, cleanup
+}
+
+// testDBName returns an isolated database name per test so parallel package
+// runs never interfere with each other or with the development database.
+func testDBName(t *testing.T) string {
+	return "batiqa_test_" + strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
 }
 
 func TestChatAPI_ValidTicketCreation(t *testing.T) {

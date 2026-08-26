@@ -23,30 +23,30 @@ if not exist .env (
     echo  [INFO] File .env dibuat dari .env.example
 )
 
-rem -- Cek MySQL, nyalakan via Docker jika perlu --
+rem -- Cek MongoDB, nyalakan via Docker jika perlu --
 set PORT_OK=0
-powershell -NoProfile -Command "if(Test-NetConnection -ComputerName 127.0.0.1 -Port 3306 -InformationLevel Quiet -WarningAction SilentlyContinue){exit 0}else{exit 1}" >nul 2>nul
+powershell -NoProfile -Command "if(Test-NetConnection -ComputerName 127.0.0.1 -Port 27017 -InformationLevel Quiet -WarningAction SilentlyContinue){exit 0}else{exit 1}" >nul 2>nul
 if not errorlevel 1 set PORT_OK=1
 
 if "!PORT_OK!"=="0" (
     where docker >nul 2>nul
     if not errorlevel 1 (
-        echo  [INFO] Menyalakan MySQL via Docker Compose...
+        echo  [INFO] Menyalakan MongoDB via Docker Compose...
         docker-compose up -d >nul 2>nul || docker compose up -d >nul 2>nul
-        echo  [INFO] Menunggu MySQL siap.
+        echo  [INFO] Menunggu MongoDB siap.
         for /l %%i in (1,1,20) do (
             if "!PORT_OK!"=="0" (
                 timeout /t 3 /nobreak >nul
-                powershell -NoProfile -Command "if(Test-NetConnection -ComputerName 127.0.0.1 -Port 3306 -InformationLevel Quiet -WarningAction SilentlyContinue){exit 0}else{exit 1}" >nul 2>nul
+                powershell -NoProfile -Command "if(Test-NetConnection -ComputerName 127.0.0.1 -Port 27017 -InformationLevel Quiet -WarningAction SilentlyContinue){exit 0}else{exit 1}" >nul 2>nul
                 if not errorlevel 1 set PORT_OK=1
             )
         )
     ) else (
-        echo  [WARN] MySQL tidak jalan dan Docker tidak ada.
+        echo  [WARN] MongoDB tidak jalan dan Docker tidak ada.
         echo  [WARN] Server tetap jalan tanpa database ^(mode degraded^).
     )
 )
-if "!PORT_OK!"=="1" echo  [OK] MySQL siap di localhost:3306
+if "!PORT_OK!"=="1" echo  [OK] MongoDB siap di localhost:27017
 
 rem -- Build --
 echo  [INFO] Build aplikasi...
@@ -57,14 +57,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem -- Migrasi database (jika DB tersedia) --
+rem -- Migrasi + seed database (jika DB tersedia) --
 if "!PORT_OK!"=="1" (
+    echo  [INFO] Migrasi + seed database...
     go build -o bin\migrate.exe .\cmd\migrate
     bin\migrate.exe
     if errorlevel 1 (
-        echo  [WARN] Migrasi gagal - cek kredensial DB di file .env
-    ) else (
-        echo  [OK] Migrasi + seed selesai
+        echo  [WARN] Migrasi gagal - cek MONGO_URI di file .env
     )
 )
 
@@ -77,6 +76,7 @@ echo    Server : http://localhost:8080/
 echo    Tamu   : http://localhost:8080/
 echo    Staff  : http://localhost:8080/staff/login.html
 echo    Login  : admin@batiqa.com / batiqa123
+echo    Mongo  : batiqa_ai @ localhost:27017 ^(Compass^)
 echo.
 echo    Tekan Ctrl+C untuk berhenti
 echo  ============================================

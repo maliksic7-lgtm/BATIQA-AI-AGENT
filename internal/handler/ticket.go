@@ -35,7 +35,7 @@ func (h *TicketHandler) Create(w http.ResponseWriter, r *http.Request) {
 	t, err := h.tickets.Create(req)
 	if err != nil {
 		// Distinguish validation vs internal
-		if ticketservice.IsValidationError(err) {
+		if ticketservice.IsValidationError(err) || errors.Is(err, ticketservice.ErrRoomRequired) {
 			WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 			return
 		}

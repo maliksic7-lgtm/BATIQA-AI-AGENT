@@ -8,7 +8,7 @@ CSS
 JavaScript
 Mobile-first responsive design
 Database
-MySQL
+MongoDB (lokal atau Docker; bisa diinspeksi via MongoDB Compass)
 AI
 
 Primary:

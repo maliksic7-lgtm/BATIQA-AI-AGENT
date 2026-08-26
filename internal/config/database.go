@@ -1,41 +1,30 @@
 package config
 
 import (
-	"database/sql"
-	"fmt"
+	"context"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// OpenDB creates a MySQL connection pool using database/sql.
-// It validates DSN, sets pool limits, and pings with timeout.
-func OpenDB(cfg *Config) (*sql.DB, error) {
-	if cfg.DBDSN == "" {
-		return nil, fmt.Errorf("DB_DSN is empty")
-	}
-	db, err := sql.Open("mysql", cfg.DBDSN)
+// ConnectMongo connects to the MongoDB server and returns the database handle.
+// Returns an error if the server cannot be reached within 5 seconds,
+// allowing graceful degradation per ERROR FLOW.md.
+func ConnectMongo(cfg *Config) (*mongo.Database, func(), error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
 	if err != nil {
-		return nil, fmt.Errorf("sql.Open: %w", err)
+		return nil, nil, err
 	}
-	db.SetMaxOpenConns(cfg.DBMaxOpen)
-	db.SetMaxIdleConns(cfg.DBMaxIdle)
-	db.SetConnMaxLifetime(5 * time.Minute)
-
-	// Ping with timeout (5s)
-	done := make(chan error, 1)
-	go func() { done <- db.Ping() }()
-
-	select {
-	case err := <-done:
-		if err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("db ping failed: %w", err)
-		}
-	case <-time.After(5 * time.Second):
-		_ = db.Close()
-		return nil, fmt.Errorf("db ping timeout (5s)")
+	if err := client.Ping(ctx, nil); err != nil {
+		_ = client.Disconnect(context.Background())
+		return nil, nil, err
 	}
 
-	return db, nil
+	db := client.Database(cfg.MongoDB)
+	cleanup := func() { _ = client.Disconnect(context.Background()) }
+	return db, cleanup, nil
 }

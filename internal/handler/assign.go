@@ -48,7 +48,7 @@ func (h *AssignHandler) handleAssign(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid JSON: "+err.Error())
 		return
 	}
-	req.StaffID = parseStaffID(r.Header.Get("X-Staff-ID"), req.StaffID)
+	req.StaffID = resolveStaffID(req.StaffID, r.Header.Get("X-Staff-ID"))
 	if req.StaffID <= 0 {
 		WriteError(w, http.StatusBadRequest, "INVALID_REQUEST", "staff_id is required")
 		return
@@ -112,13 +112,17 @@ func writeTicketError(w http.ResponseWriter, err error) {
 	}
 }
 
-// parseStaffID prefers the authenticated staff from the auth middleware,
-// falling back to the body value (admin assigning on behalf of others).
-func parseStaffID(headerVal string, fallback int64) int64 {
+// resolveStaffID prefers an explicit staff_id from the request body
+// (admin assigning on behalf of others) and falls back to the
+// authenticated staff from the auth middleware.
+func resolveStaffID(bodyID int64, headerVal string) int64 {
+	if bodyID > 0 {
+		return bodyID
+	}
 	if v := strings.TrimSpace(headerVal); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
 			return n
 		}
 	}
-	return fallback
+	return 0
 }

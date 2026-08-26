@@ -2,13 +2,13 @@ package model
 
 import "time"
 
-// HotelInformation represents hotel_information table
+// HotelInformation represents the hotel_information collection
 type HotelInformation struct {
-	ID        int64     `json:"id" db:"id"`
-	Category  string    `json:"category" db:"category"`
-	Title     string    `json:"title" db:"title"`
-	Content   string    `json:"content" db:"content"`
-	Active    bool      `json:"active" db:"active"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	ID        int64     `json:"id" bson:"_id"`
+	Category  string    `json:"category" bson:"category"`
+	Title     string    `json:"title" bson:"title"`
+	Content   string    `json:"content" bson:"content"`
+	Active    bool      `json:"active" bson:"active"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }

@@ -1,33 +1,46 @@
 package repository
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"batiqa-ai/internal/model"
 )
 
-// ConversationRepository handles conversations table.
+// ConversationRepository handles the conversations collection.
 type ConversationRepository struct {
-	db *sql.DB
+	db *mongo.Database
 }
 
-func NewConversationRepository(db *sql.DB) *ConversationRepository {
+func NewConversationRepository(db *mongo.Database) *ConversationRepository {
 	return &ConversationRepository{db: db}
 }
 
-// Create inserts a conversation entry (parameterized).
+const conversationsCol = "conversations"
+
+// Create inserts a conversation entry.
 func (r *ConversationRepository) Create(c *model.Conversation) error {
 	if !model.IsValidRole(c.Role) {
 		return fmt.Errorf("invalid role: %s", c.Role)
 	}
-	query := `INSERT INTO conversations (session_id, role, message, intent) VALUES (?, ?, ?, ?)`
-	res, err := r.db.Exec(query, c.SessionID, c.Role, c.Message, c.Intent)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	id, err := nextID(ctx, r.db, conversationsCol)
+	if err != nil {
+		return fmt.Errorf("conversation Create id: %w", err)
+	}
+	c.ID = id
+	c.CreatedAt = time.Now()
+	_, err = r.db.Collection(conversationsCol).InsertOne(ctx, c)
 	if err != nil {
 		return fmt.Errorf("conversation Create: %w", err)
 	}
-	id, _ := res.LastInsertId()
-	c.ID = id
 	return nil
 }
 
@@ -36,24 +49,22 @@ func (r *ConversationRepository) ListBySession(sessionID string, limit int) ([]*
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := `SELECT id, session_id, role, message, intent, created_at FROM conversations WHERE session_id = ? ORDER BY created_at ASC LIMIT ?`
-	rows, err := r.db.Query(query, sessionID, limit)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := r.db.Collection(conversationsCol).Find(
+		ctx,
+		bson.M{"session_id": sessionID},
+		options.Find().SetSort(bson.M{"created_at": 1}).SetLimit(int64(limit)),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("conversation ListBySession: %w", err)
 	}
-	defer rows.Close()
+	defer cursor.Close(ctx)
 
 	var out []*model.Conversation
-	for rows.Next() {
-		var c model.Conversation
-		var intent sql.NullString
-		if err := rows.Scan(&c.ID, &c.SessionID, &c.Role, &c.Message, &intent, &c.CreatedAt); err != nil {
-			return nil, fmt.Errorf("conversation scan: %w", err)
-		}
-		if intent.Valid {
-			c.Intent = &intent.String
-		}
-		out = append(out, &c)
+	if err := cursor.All(ctx, &out); err != nil {
+		return nil, fmt.Errorf("conversation decode: %w", err)
 	}
-	return out, rows.Err()
+	return out, nil
 }

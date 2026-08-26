@@ -1,68 +1,58 @@
 package repository
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"batiqa-ai/internal/model"
 )
 
-// RecommendationRepository handles recommendations table.
+// RecommendationRepository handles the recommendations collection.
 type RecommendationRepository struct {
-	db *sql.DB
+	db *mongo.Database
 }
 
-func NewRecommendationRepository(db *sql.DB) *RecommendationRepository {
+func NewRecommendationRepository(db *mongo.Database) *RecommendationRepository {
 	return &RecommendationRepository{db: db}
 }
 
-// ListActive returns active recommendations with optional filters (parameterized).
+const recommendationsCol = "recommendations"
+
+// ListActive returns active recommendations with optional filters.
 func (r *RecommendationRepository) ListActive(category *string, maxPrice *int) ([]*model.Recommendation, error) {
-	base := `SELECT id, name, category, description, price_min, price_max, distance_km, address, active, created_at FROM recommendations WHERE active = TRUE`
-	args := []interface{}{}
+	filter := bson.M{"active": true}
 	if category != nil && *category != "" {
-		base += ` AND category = ?`
-		args = append(args, *category)
+		filter["category"] = *category
 	}
 	if maxPrice != nil {
-		base += ` AND (price_max IS NULL OR price_max <= ?)`
-		args = append(args, *maxPrice)
+		// Items without a price cap always match; otherwise price_max <= budget
+		filter["$or"] = []bson.M{
+			{"price_max": bson.M{"$exists": false}},
+			{"price_max": nil},
+			{"price_max": bson.M{"$lte": *maxPrice}},
+		}
 	}
-	base += ` ORDER BY distance_km ASC`
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	rows, err := r.db.Query(base, args...)
+	cursor, err := r.db.Collection(recommendationsCol).Find(
+		ctx,
+		filter,
+		options.Find().SetSort(bson.M{"distance_km": 1}),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("recommendation ListActive: %w", err)
 	}
-	defer rows.Close()
+	defer cursor.Close(ctx)
 
 	var out []*model.Recommendation
-	for rows.Next() {
-		var rec model.Recommendation
-		var desc, addr sql.NullString
-		var pMin, pMax sql.NullInt64
-		var dist sql.NullFloat64
-		if err := rows.Scan(&rec.ID, &rec.Name, &rec.Category, &desc, &pMin, &pMax, &dist, &addr, &rec.Active, &rec.CreatedAt); err != nil {
-			return nil, fmt.Errorf("recommendation scan: %w", err)
-		}
-		if desc.Valid {
-			rec.Description = &desc.String
-		}
-		if pMin.Valid {
-			v := int(pMin.Int64)
-			rec.PriceMin = &v
-		}
-		if pMax.Valid {
-			v := int(pMax.Int64)
-			rec.PriceMax = &v
-		}
-		if dist.Valid {
-			rec.DistanceKm = &dist.Float64
-		}
-		if addr.Valid {
-			rec.Address = &addr.String
-		}
-		out = append(out, &rec)
+	if err := cursor.All(ctx, &out); err != nil {
+		return nil, fmt.Errorf("recommendation decode: %w", err)
 	}
-	return out, rows.Err()
+	return out, nil
 }

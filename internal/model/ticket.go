@@ -24,19 +24,20 @@ const (
 	StatusCancelled  = "CANCELLED"
 )
 
-// Ticket represents tickets table (main operational table)
+// Ticket represents the tickets collection.
+// ID doubles as the MongoDB _id; ticket_number is TKT-{id} zero-padded 6 digits.
 type Ticket struct {
-	ID           int64      `json:"id" db:"id"`
-	TicketNumber string     `json:"ticket_number" db:"ticket_number"`
-	RoomNumber   string     `json:"room_number" db:"room_number"`
-	Department   string     `json:"department" db:"department"`
-	Category     string     `json:"category" db:"category"`
-	Description  string     `json:"description" db:"description"`
-	Priority     string     `json:"priority" db:"priority"`
-	Status       string     `json:"status" db:"status"`
-	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
-	ResolvedAt   *time.Time `json:"resolved_at,omitempty" db:"resolved_at"`
+	ID           int64      `json:"id" bson:"_id"`
+	TicketNumber string     `json:"ticket_number" bson:"ticket_number"`
+	RoomNumber   string     `json:"room_number" bson:"room_number"`
+	Department   string     `json:"department" bson:"department"`
+	Category     string     `json:"category" bson:"category"`
+	Description  string     `json:"description" bson:"description"`
+	Priority     string     `json:"priority" bson:"priority"`
+	Status       string     `json:"status" bson:"status"`
+	CreatedAt    time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at" bson:"updated_at"`
+	ResolvedAt   *time.Time `json:"resolved_at,omitempty" bson:"resolved_at,omitempty"`
 }
 
 // IsValidDepartment validates department

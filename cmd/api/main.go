@@ -16,15 +16,15 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// Try to open DB for Phase 4 ticket system. If fails, start with health only (graceful degradation per ERROR FLOW.md)
+	// Try to connect to MongoDB. If unavailable, start with health only (graceful degradation per ERROR FLOW.md)
 	var r http.Handler
-	db, err := config.OpenDB(cfg)
+	db, closeDB, err := config.ConnectMongo(cfg)
 	if err != nil {
-		log.Printf("WARNING: DB not available (%v) - starting with health endpoint only", err)
+		log.Printf("WARNING: MongoDB not available (%v) - starting with health endpoint only", err)
 		r = router.New()
 	} else {
-		log.Printf("Database connected")
-		defer db.Close()
+		defer closeDB()
+		log.Printf("MongoDB connected: %s", cfg.MongoDB)
 		r = router.NewWithDB(db)
 	}
 

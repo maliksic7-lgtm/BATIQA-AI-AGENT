@@ -1,8 +1,11 @@
 package ticket
 
 import (
-	"database/sql"
+	"context"
+	"strings"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"batiqa-ai/internal/config"
 	"batiqa-ai/internal/model"
@@ -10,26 +13,23 @@ import (
 	"batiqa-ai/internal/service/ai"
 )
 
-func setupTestDB(t *testing.T) *sql.DB {
+func setupTestDB(t *testing.T) *mongo.Database {
 	t.Helper()
 	cfg := config.Load()
-	db, err := config.OpenDB(cfg)
+	cfg.MongoDB = "batiqa_test_" + strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
+	db, closeDB, err := config.ConnectMongo(cfg)
 	if err != nil {
-		t.Skipf("DB not available: %v", err)
+		t.Skipf("MongoDB not available: %v", err)
 	}
-	// Clean ticket tables before test
-	_, _ = db.Exec("SET FOREIGN_KEY_CHECKS=0")
-	_, _ = db.Exec("TRUNCATE TABLE ticket_assignments")
-	_, _ = db.Exec("TRUNCATE TABLE tickets")
-	_, _ = db.Exec("TRUNCATE TABLE conversations")
-	_, _ = db.Exec("TRUNCATE TABLE guests")
-	_, _ = db.Exec("SET FOREIGN_KEY_CHECKS=1")
+	t.Cleanup(func() {
+		_ = db.Drop(context.Background())
+		closeDB()
+	})
 	return db
 }
 
 func TestCreateValidTicket(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	req := CreateRequest{
@@ -64,7 +64,6 @@ func TestCreateValidTicket(t *testing.T) {
 
 func TestCreateMissingRoomNumber(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	req := CreateRequest{
@@ -85,7 +84,6 @@ func TestCreateMissingRoomNumber(t *testing.T) {
 
 func TestCreateInvalidDepartment(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	req := CreateRequest{
@@ -103,7 +101,6 @@ func TestCreateInvalidDepartment(t *testing.T) {
 
 func TestCreateInvalidPriority(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	req := CreateRequest{
@@ -121,7 +118,6 @@ func TestCreateInvalidPriority(t *testing.T) {
 
 func TestCreateInvalidCategory(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	req := CreateRequest{
@@ -139,7 +135,6 @@ func TestCreateInvalidCategory(t *testing.T) {
 
 func TestCreateFromAI(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	aiResult := &ai.AIResult{
@@ -161,7 +156,6 @@ func TestCreateFromAI(t *testing.T) {
 
 func TestCreateFromAIMissingRoom(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	aiResult := &ai.AIResult{
@@ -180,7 +174,6 @@ func TestCreateFromAIMissingRoom(t *testing.T) {
 
 func TestGetTicket(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	req := CreateRequest{RoomNumber: "212", Department: "ENGINEERING", Category: "TV_PROBLEM", Description: "TV mati", Priority: "MEDIUM"}
@@ -201,7 +194,6 @@ func TestGetTicket(t *testing.T) {
 
 func TestUpdateTicketStatus(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	req := CreateRequest{RoomNumber: "305", Department: "HOUSEKEEPING", Category: "TOWEL_REQUEST", Description: "handuk", Priority: "MEDIUM"}
@@ -232,7 +224,6 @@ func TestUpdateTicketStatus(t *testing.T) {
 
 func TestInvalidStatusTransition(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	req := CreateRequest{RoomNumber: "305", Department: "HOUSEKEEPING", Category: "TOWEL_REQUEST", Description: "handuk", Priority: "MEDIUM"}
@@ -254,7 +245,6 @@ func TestInvalidStatusTransition(t *testing.T) {
 
 func TestListFiltering(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	// Create 2 tickets different dept/priority
@@ -283,7 +273,6 @@ func TestListFiltering(t *testing.T) {
 
 func TestTicketNumberGeneration(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 	svc := NewService(repository.NewTicketRepository(db), repository.NewGuestRepository(db))
 
 	t1, _ := svc.Create(CreateRequest{RoomNumber: "301", Department: "HOUSEKEEPING", Category: "TOWEL_REQUEST", Description: "a", Priority: "MEDIUM"})

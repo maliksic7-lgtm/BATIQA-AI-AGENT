@@ -1,20 +1,31 @@
 package repository
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"strings"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"batiqa-ai/internal/model"
 )
 
-// TicketRepository handles tickets table with parameterized queries.
+// TicketRepository handles the tickets collection.
 type TicketRepository struct {
-	db *sql.DB
+	db *mongo.Database
 }
 
-func NewTicketRepository(db *sql.DB) *TicketRepository {
+func NewTicketRepository(db *mongo.Database) *TicketRepository {
 	return &TicketRepository{db: db}
+}
+
+const ticketsCol = "tickets"
+
+func ticketCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 5*time.Second)
 }
 
 // Create inserts a ticket and generates ticket_number as TKT-{id} (zero-padded 6 digits).
@@ -38,7 +49,19 @@ func (r *TicketRepository) Create(t *model.Ticket) error {
 	if strings.TrimSpace(t.Description) == "" {
 		return fmt.Errorf("description is required")
 	}
-	// Default status/priority if empty
+
+	ctx, cancel := ticketCtx()
+	defer cancel()
+
+	id, err := nextID(ctx, r.db, ticketsCol)
+	if err != nil {
+		return fmt.Errorf("ticket Create id: %w", err)
+	}
+	t.ID = id
+	t.TicketNumber = fmt.Sprintf("TKT-%06d", id)
+	now := time.Now()
+	t.CreatedAt = now
+	t.UpdatedAt = now
 	if t.Status == "" {
 		t.Status = model.StatusOpen
 	}
@@ -46,196 +69,135 @@ func (r *TicketRepository) Create(t *model.Ticket) error {
 		t.Priority = model.PriorityMedium
 	}
 
-	// Use transaction to ensure ticket_number generation is atomic.
-	tx, err := r.db.Begin()
-	if err != nil {
-		return fmt.Errorf("ticket Create begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	// Insert with placeholder ticket_number (will be updated)
-	placeholder := "TMP"
-	query := `INSERT INTO tickets (ticket_number, room_number, department, category, description, priority, status)
-	          VALUES (?, ?, ?, ?, ?, ?, ?)`
-	res, err := tx.Exec(query, placeholder, t.RoomNumber, t.Department, t.Category, t.Description, t.Priority, t.Status)
-	if err != nil {
+	if _, err := r.db.Collection(ticketsCol).InsertOne(ctx, t); err != nil {
 		return fmt.Errorf("ticket Create insert: %w", err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return fmt.Errorf("ticket Create last insert id: %w", err)
-	}
-	t.ID = id
-	ticketNumber := fmt.Sprintf("TKT-%06d", id)
-
-	// Update ticket_number
-	if _, err := tx.Exec(`UPDATE tickets SET ticket_number = ? WHERE id = ?`, ticketNumber, id); err != nil {
-		return fmt.Errorf("ticket Create update number: %w", err)
-	}
-	t.TicketNumber = ticketNumber
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("ticket Create commit: %w", err)
-	}
-
-	// Refresh timestamps
-	return r.reload(t)
-}
-
-func (r *TicketRepository) reload(t *model.Ticket) error {
-	query := `SELECT id, ticket_number, room_number, department, category, description, priority, status, created_at, updated_at, resolved_at
-	          FROM tickets WHERE id = ?`
-	row := r.db.QueryRow(query, t.ID)
-	var resolved sql.NullTime
-	err := row.Scan(&t.ID, &t.TicketNumber, &t.RoomNumber, &t.Department, &t.Category, &t.Description, &t.Priority, &t.Status, &t.CreatedAt, &t.UpdatedAt, &resolved)
-	if err != nil {
-		return fmt.Errorf("ticket reload: %w", err)
-	}
-	if resolved.Valid {
-		t.ResolvedAt = &resolved.Time
 	}
 	return nil
 }
 
 // FindByTicketNumber returns ticket by ticket_number.
 func (r *TicketRepository) FindByTicketNumber(ticketNumber string) (*model.Ticket, error) {
-	query := `SELECT id, ticket_number, room_number, department, category, description, priority, status, created_at, updated_at, resolved_at
-	          FROM tickets WHERE ticket_number = ?`
-	row := r.db.QueryRow(query, ticketNumber)
+	ctx, cancel := ticketCtx()
+	defer cancel()
+
 	var t model.Ticket
-	var resolved sql.NullTime
-	err := row.Scan(&t.ID, &t.TicketNumber, &t.RoomNumber, &t.Department, &t.Category, &t.Description, &t.Priority, &t.Status, &t.CreatedAt, &t.UpdatedAt, &resolved)
+	err := r.db.Collection(ticketsCol).FindOne(ctx, bson.M{"ticket_number": ticketNumber}).Decode(&t)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == mongo.ErrNoDocuments {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("ticket FindByTicketNumber: %w", err)
-	}
-	if resolved.Valid {
-		t.ResolvedAt = &resolved.Time
 	}
 	return &t, nil
 }
 
 // FindByID returns ticket by id.
 func (r *TicketRepository) FindByID(id int64) (*model.Ticket, error) {
-	query := `SELECT id, ticket_number, room_number, department, category, description, priority, status, created_at, updated_at, resolved_at
-	          FROM tickets WHERE id = ?`
-	row := r.db.QueryRow(query, id)
+	ctx, cancel := ticketCtx()
+	defer cancel()
+
 	var t model.Ticket
-	var resolved sql.NullTime
-	err := row.Scan(&t.ID, &t.TicketNumber, &t.RoomNumber, &t.Department, &t.Category, &t.Description, &t.Priority, &t.Status, &t.CreatedAt, &t.UpdatedAt, &resolved)
+	err := r.db.Collection(ticketsCol).FindOne(ctx, bson.M{"_id": id}).Decode(&t)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == mongo.ErrNoDocuments {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("ticket FindByID: %w", err)
-	}
-	if resolved.Valid {
-		t.ResolvedAt = &resolved.Time
 	}
 	return &t, nil
 }
 
 // List returns tickets with optional filters, ordered by created_at DESC.
 func (r *TicketRepository) List(f model.TicketFilter) ([]*model.Ticket, error) {
-	// Build query with parameterized filters (no string concatenation of values)
-	base := `SELECT id, ticket_number, room_number, department, category, description, priority, status, created_at, updated_at, resolved_at FROM tickets WHERE 1=1`
-	args := []interface{}{}
-
+	filter := bson.M{}
 	if f.Department != nil && *f.Department != "" {
 		if !model.IsValidDepartment(*f.Department) {
 			return nil, fmt.Errorf("invalid department filter: %s", *f.Department)
 		}
-		base += ` AND department = ?`
-		args = append(args, *f.Department)
+		filter["department"] = *f.Department
 	}
 	if f.Status != nil && *f.Status != "" {
 		if !model.IsValidStatus(*f.Status) {
 			return nil, fmt.Errorf("invalid status filter: %s", *f.Status)
 		}
-		base += ` AND status = ?`
-		args = append(args, *f.Status)
+		filter["status"] = *f.Status
 	}
 	if f.Priority != nil && *f.Priority != "" {
 		if !model.IsValidPriority(*f.Priority) {
 			return nil, fmt.Errorf("invalid priority filter: %s", *f.Priority)
 		}
-		base += ` AND priority = ?`
-		args = append(args, *f.Priority)
+		filter["priority"] = *f.Priority
 	}
 	if f.RoomNumber != nil && *f.RoomNumber != "" {
-		base += ` AND room_number = ?`
-		args = append(args, *f.RoomNumber)
+		filter["room_number"] = *f.RoomNumber
 	}
-	base += ` ORDER BY created_at DESC`
 
+	opts := options.Find().SetSort(bson.M{"created_at": -1})
 	if f.Limit > 0 {
-		if f.Limit > 100 {
-			f.Limit = 100
+		limit := int64(f.Limit)
+		if limit > 100 {
+			limit = 100
 		}
-		base += ` LIMIT ?`
-		args = append(args, f.Limit)
+		opts.SetLimit(limit)
 		if f.Offset > 0 {
-			base += ` OFFSET ?`
-			args = append(args, f.Offset)
+			opts.SetSkip(int64(f.Offset))
 		}
 	}
 
-	rows, err := r.db.Query(base, args...)
+	ctx, cancel := ticketCtx()
+	defer cancel()
+
+	cursor, err := r.db.Collection(ticketsCol).Find(ctx, filter, opts)
 	if err != nil {
 		return nil, fmt.Errorf("ticket List: %w", err)
 	}
-	defer rows.Close()
+	defer cursor.Close(ctx)
 
 	var out []*model.Ticket
-	for rows.Next() {
-		var t model.Ticket
-		var resolved sql.NullTime
-		if err := rows.Scan(&t.ID, &t.TicketNumber, &t.RoomNumber, &t.Department, &t.Category, &t.Description, &t.Priority, &t.Status, &t.CreatedAt, &t.UpdatedAt, &resolved); err != nil {
-			return nil, fmt.Errorf("ticket List scan: %w", err)
-		}
-		if resolved.Valid {
-			t.ResolvedAt = &resolved.Time
-		}
-		out = append(out, &t)
+	if err := cursor.All(ctx, &out); err != nil {
+		return nil, fmt.Errorf("ticket List decode: %w", err)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
-// UpdateStatus updates ticket status with validation and sets resolved_at when RESOLVED.
+// UpdateStatus updates ticket status with validation and sets/clears resolved_at.
 func (r *TicketRepository) UpdateStatus(ticketNumber, newStatus string) (*model.Ticket, error) {
 	if !model.IsValidStatus(newStatus) {
 		return nil, fmt.Errorf("invalid status: %s", newStatus)
 	}
-	t, err := r.FindByTicketNumber(ticketNumber)
+	current, err := r.FindByTicketNumber(ticketNumber)
 	if err != nil {
 		return nil, err
 	}
-	if t == nil {
+	if current == nil {
 		return nil, fmt.Errorf("ticket not found: %s", ticketNumber)
 	}
-	if !model.IsValidStatusTransition(t.Status, newStatus) {
-		return nil, fmt.Errorf("invalid status transition %s -> %s", t.Status, newStatus)
+	if !model.IsValidStatusTransition(current.Status, newStatus) {
+		return nil, fmt.Errorf("invalid status transition %s -> %s", current.Status, newStatus)
 	}
 
-	var query string
-	var args []interface{}
+	set := bson.M{"status": newStatus, "updated_at": time.Now()}
 	if newStatus == model.StatusResolved {
-		query = `UPDATE tickets SET status = ?, resolved_at = CURRENT_TIMESTAMP WHERE ticket_number = ?`
-		args = []interface{}{newStatus, ticketNumber}
+		now := time.Now()
+		set["resolved_at"] = now
 	} else {
-		// Clear resolved_at if moving away from RESOLVED
-		query = `UPDATE tickets SET status = ?, resolved_at = NULL WHERE ticket_number = ?`
-		args = []interface{}{newStatus, ticketNumber}
-		if newStatus == model.StatusCancelled {
-			// keep resolved_at NULL
-		}
+		set["resolved_at"] = nil // clear when leaving RESOLVED
 	}
-	if _, err := r.db.Exec(query, args...); err != nil {
+
+	ctx, cancel := ticketCtx()
+	defer cancel()
+
+	var t model.Ticket
+	err = r.db.Collection(ticketsCol).FindOneAndUpdate(
+		ctx,
+		bson.M{"ticket_number": ticketNumber},
+		bson.M{"$set": set},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&t)
+	if err != nil {
 		return nil, fmt.Errorf("ticket UpdateStatus: %w", err)
 	}
-	return r.FindByTicketNumber(ticketNumber)
+	return &t, nil
 }
 
 // UpdatePriority updates ticket priority.
@@ -243,37 +205,75 @@ func (r *TicketRepository) UpdatePriority(ticketNumber, newPriority string) (*mo
 	if !model.IsValidPriority(newPriority) {
 		return nil, fmt.Errorf("invalid priority: %s", newPriority)
 	}
-	if _, err := r.db.Exec(`UPDATE tickets SET priority = ? WHERE ticket_number = ?`, newPriority, ticketNumber); err != nil {
+	ctx, cancel := ticketCtx()
+	defer cancel()
+
+	var t model.Ticket
+	err := r.db.Collection(ticketsCol).FindOneAndUpdate(
+		ctx,
+		bson.M{"ticket_number": ticketNumber},
+		bson.M{"$set": bson.M{"priority": newPriority, "updated_at": time.Now()}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&t)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("ticket not found: %s", ticketNumber)
+		}
 		return nil, fmt.Errorf("ticket UpdatePriority: %w", err)
 	}
-	return r.FindByTicketNumber(ticketNumber)
+	return &t, nil
 }
 
 // TicketStats holds dashboard stats
 type TicketStats struct {
-	Total         int
-	Open          int
-	High          int
-	Housekeeping  int
-	Engineering   int
-	ResolvedToday int
+	Total         int64
+	Open          int64
+	High          int64
+	Housekeeping  int64
+	Engineering   int64
+	ResolvedToday int64
 }
 
-// GetStats returns dashboard statistics for staff overview
+// GetStats returns dashboard statistics for staff overview.
 func (r *TicketRepository) GetStats() (*TicketStats, error) {
+	ctx, cancel := ticketCtx()
+	defer cancel()
+
+	col := r.db.Collection(ticketsCol)
+	active := bson.M{"status": bson.M{"$nin": []string{model.StatusResolved, model.StatusCancelled}}}
 	stats := &TicketStats{}
-	queries := map[string]*int{
-		`SELECT COUNT(*) FROM tickets`:                       &stats.Total,
-		`SELECT COUNT(*) FROM tickets WHERE status = 'OPEN'`: &stats.Open,
-		`SELECT COUNT(*) FROM tickets WHERE priority = 'HIGH' AND status != 'RESOLVED' AND status != 'CANCELLED'`:           &stats.High,
-		`SELECT COUNT(*) FROM tickets WHERE department = 'HOUSEKEEPING' AND status != 'RESOLVED' AND status != 'CANCELLED'`: &stats.Housekeeping,
-		`SELECT COUNT(*) FROM tickets WHERE department = 'ENGINEERING' AND status != 'RESOLVED' AND status != 'CANCELLED'`:  &stats.Engineering,
-		`SELECT COUNT(*) FROM tickets WHERE status = 'RESOLVED' AND DATE(resolved_at) = CURDATE()`:                          &stats.ResolvedToday,
+
+	type countJob struct {
+		filter bson.M
+		dst    *int64
 	}
-	for q, ptr := range queries {
-		if err := r.db.QueryRow(q).Scan(ptr); err != nil {
-			return nil, fmt.Errorf("stats query %q: %w", q, err)
+	yesterday := time.Now().Truncate(24 * time.Hour)
+	jobs := []countJob{
+		{bson.M{}, &stats.Total},
+		{bson.M{"status": model.StatusOpen}, &stats.Open},
+		{merge(active, bson.M{"priority": model.PriorityHigh}), &stats.High},
+		{merge(active, bson.M{"department": model.DeptHousekeeping}), &stats.Housekeeping},
+		{merge(active, bson.M{"department": model.DeptEngineering}), &stats.Engineering},
+		{bson.M{"status": model.StatusResolved, "resolved_at": bson.M{"$gte": yesterday}}, &stats.ResolvedToday},
+	}
+	for _, j := range jobs {
+		n, err := col.CountDocuments(ctx, j.filter)
+		if err != nil {
+			return nil, fmt.Errorf("stats count: %w", err)
 		}
+		*j.dst = n
 	}
 	return stats, nil
+}
+
+// merge combines two filter documents into one.
+func merge(base, extra bson.M) bson.M {
+	out := bson.M{}
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range extra {
+		out[k] = v
+	}
+	return out
 }

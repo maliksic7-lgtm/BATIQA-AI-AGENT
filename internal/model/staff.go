@@ -2,14 +2,14 @@ package model
 
 import "time"
 
-// Staff represents staff table
+// Staff represents the staff collection
 type Staff struct {
-	ID           int64     `json:"id" db:"id"`
-	Name         string    `json:"name" db:"name"`
-	Email        string    `json:"email" db:"email"`
-	PasswordHash string    `json:"-" db:"password_hash"` // never expose via JSON
-	Department   string    `json:"department" db:"department"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	ID           int64     `json:"id" bson:"_id"`
+	Name         string    `json:"name" bson:"name"`
+	Email        string    `json:"email" bson:"email"`
+	PasswordHash string    `json:"-" bson:"password_hash"` // never expose via JSON
+	Department   string    `json:"department" bson:"department"`
+	CreatedAt    time.Time `json:"created_at" bson:"created_at"`
 }
 
 // IsValidStaffDepartment validates staff department (includes ADMIN)
@@ -17,10 +17,10 @@ func IsValidStaffDepartment(d string) bool {
 	return d == DeptHousekeeping || d == DeptEngineering || d == DeptFrontOffice || d == "ADMIN"
 }
 
-// TicketAssignment represents ticket_assignments table
+// TicketAssignment represents the ticket_assignments collection
 type TicketAssignment struct {
-	ID         int64     `json:"id" db:"id"`
-	TicketID   int64     `json:"ticket_id" db:"ticket_id"`
-	StaffID    int64     `json:"staff_id" db:"staff_id"`
-	AssignedAt time.Time `json:"assigned_at" db:"assigned_at"`
+	ID         int64     `json:"id" bson:"_id"`
+	TicketID   int64     `json:"ticket_id" bson:"ticket_id"`
+	StaffID    int64     `json:"staff_id" bson:"staff_id"`
+	AssignedAt time.Time `json:"assigned_at" bson:"assigned_at"`
 }

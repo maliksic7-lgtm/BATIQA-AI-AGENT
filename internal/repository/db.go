@@ -1,9 +1,6 @@
 package repository
 
-import "database/sql"
+import "go.mongodb.org/mongo-driver/mongo"
 
-// DB is alias for *sql.DB to allow future interface mocking.
-type DB = sql.DB
-
-// Tx is alias for *sql.Tx
-type Tx = sql.Tx
+// Database is the MongoDB database handle used by all repositories.
+type Database = mongo.Database

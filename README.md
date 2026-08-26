@@ -17,11 +17,11 @@ Tamu scan QR di kamar → web app (tanpa install aplikasi) → chat bahasa natur
 | Layer | Teknologi |
 |---|---|
 | Backend | Go 1.24 (`net/http` murni, tanpa framework) |
-| Database | MySQL 8 |
+| Database | MongoDB (kompatibel MongoDB Compass) |
 | AI | Gemini API via REST + provider abstraction (fallback rule-based) |
 | Frontend | HTML/CSS/JS vanilla — tema resmi BATIQA (#033C5A / #C9AC85) |
 
-Arsitektur berlapis: `Handler → Service → Repository → MySQL`. AI tidak pernah menyentuh DB langsung — semua output tervalidasi backend.
+Arsitektur berlapis: `Handler → Service → Repository → MongoDB`. AI tidak pernah menyentuh DB langsung — semua output tervalidasi backend. ID integer di-generate atomik via collection `counters`, sehingga `ticket_number` tetap berformat `TKT-000001`.
 
 ## Struktur Proyek
 
@@ -32,15 +32,14 @@ Arsitektur berlapis: `Handler → Service → Repository → MySQL`. AI tidak pe
 ├── internal/
 │   ├── config/            # env-based configuration
 │   ├── handler/           # HTTP handlers (chat, ticket, auth, dst.)
-│   ├── model/             # struct DB + enum validasi
-│   ├── repository/        # akses MySQL (parameterized queries)
+│   ├── model/             # struct koleksi + enum validasi
+│   ├── repository/        # akses MongoDB (+ migrate/seed idempotent)
 │   ├── router/            # registrasi route, middleware, static files
 │   └── service/
 │       ├── ai/            # pipeline AI: language→intent→entity→routing→priority→action
 │       └── ticket/        # business logic tiket (validasi + sentinel errors)
-├── migrations/            # SQL skema + seed (idempotent)
 ├── web/                   # frontend guest (mobile-first) + staff dashboard
-├── docker-compose.yml     # MySQL saja; API jalan lokal
+├── docker-compose.yml     # MongoDB saja; API jalan lokal
 └── go.mod
 ```
 
@@ -48,7 +47,7 @@ Arsitektur berlapis: `Handler → Service → Repository → MySQL`. AI tidak pe
 
 ### Prasyarat
 - Go 1.24+
-- Docker (untuk MySQL) ATAU MySQL lokal — tanpa keduanya server tetap jalan dalam mode degraded
+- MongoDB lokal (misal via MongoDB Compass/Community) ATAU Docker — tanpa keduanya server tetap jalan dalam mode degraded
 
 ### Cara Paling Gampang (Windows)
 
@@ -56,17 +55,19 @@ Arsitektur berlapis: `Handler → Service → Repository → MySQL`. AI tidak pe
 run.bat
 ```
 
-Satu perintah untuk semuanya: nyalakan MySQL via Docker (jika ada), build, migrasi + seed, jalankan server. Tinggal buka:
+Satu perintah untuk semuanya: nyalakan MongoDB via Docker (jika ada), build, migrasi + seed, jalankan server. Tinggal buka:
 
 - Tamu: http://localhost:8080/
 - Staff: http://localhost:8080/staff/login.html (`admin@batiqa.com` / `batiqa123`)
 
+Data bisa dilihat langsung di **MongoDB Compass** → database `batiqa_ai`.
+
 ### Manual (Linux/macOS/CI)
 
 ```bash
-cp .env.example .env          # sesuaikan DB_DSN, isi GEMINI_API_KEY jika ada
-docker-compose up -d          # MySQL
-go run ./cmd/migrate          # migrasi + seed
+cp .env.example .env          # sesuaikan MONGO_URI, isi GEMINI_API_KEY jika ada
+docker-compose up -d          # MongoDB (skip jika sudah ada lokal)
+go run ./cmd/migrate          # index + seed data awal
 go run ./cmd/api              # server di :8080
 ```
 

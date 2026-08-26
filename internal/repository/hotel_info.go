@@ -1,56 +1,63 @@
 package repository
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"batiqa-ai/internal/model"
 )
 
-// HotelInfoRepository handles hotel_information table.
+// HotelInfoRepository handles the hotel_information collection.
 type HotelInfoRepository struct {
-	db *sql.DB
+	db *mongo.Database
 }
 
-func NewHotelInfoRepository(db *sql.DB) *HotelInfoRepository {
+func NewHotelInfoRepository(db *mongo.Database) *HotelInfoRepository {
 	return &HotelInfoRepository{db: db}
 }
 
+const hotelInfoCol = "hotel_information"
+
 // ListActive returns all active hotel information, optionally filtered by category.
 func (r *HotelInfoRepository) ListActive(category *string) ([]*model.HotelInformation, error) {
-	base := `SELECT id, category, title, content, active, created_at, updated_at FROM hotel_information WHERE active = TRUE`
-	args := []interface{}{}
+	filter := bson.M{"active": true}
 	if category != nil && *category != "" {
-		base += ` AND category = ?`
-		args = append(args, *category)
+		filter["category"] = *category
 	}
-	base += ` ORDER BY category ASC, title ASC`
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	rows, err := r.db.Query(base, args...)
+	cursor, err := r.db.Collection(hotelInfoCol).Find(
+		ctx,
+		filter,
+		options.Find().SetSort(bson.D{{Key: "category", Value: 1}, {Key: "title", Value: 1}}),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("hotel_info ListActive: %w", err)
 	}
-	defer rows.Close()
+	defer cursor.Close(ctx)
 
 	var out []*model.HotelInformation
-	for rows.Next() {
-		var h model.HotelInformation
-		if err := rows.Scan(&h.ID, &h.Category, &h.Title, &h.Content, &h.Active, &h.CreatedAt, &h.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("hotel_info scan: %w", err)
-		}
-		out = append(out, &h)
+	if err := cursor.All(ctx, &out); err != nil {
+		return nil, fmt.Errorf("hotel_info decode: %w", err)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // FindByID returns hotel info by id.
 func (r *HotelInfoRepository) FindByID(id int64) (*model.HotelInformation, error) {
-	query := `SELECT id, category, title, content, active, created_at, updated_at FROM hotel_information WHERE id = ?`
-	row := r.db.QueryRow(query, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	var h model.HotelInformation
-	err := row.Scan(&h.ID, &h.Category, &h.Title, &h.Content, &h.Active, &h.CreatedAt, &h.UpdatedAt)
+	err := r.db.Collection(hotelInfoCol).FindOne(ctx, bson.M{"_id": id}).Decode(&h)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == mongo.ErrNoDocuments {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("hotel_info FindByID: %w", err)
@@ -60,12 +67,20 @@ func (r *HotelInfoRepository) FindByID(id int64) (*model.HotelInformation, error
 
 // Create inserts new hotel information (admin only, not AI).
 func (r *HotelInfoRepository) Create(h *model.HotelInformation) error {
-	query := `INSERT INTO hotel_information (category, title, content, active) VALUES (?, ?, ?, ?)`
-	res, err := r.db.Exec(query, h.Category, h.Title, h.Content, h.Active)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	id, err := nextID(ctx, r.db, hotelInfoCol)
+	if err != nil {
+		return fmt.Errorf("hotel_info Create id: %w", err)
+	}
+	h.ID = id
+	now := time.Now()
+	h.CreatedAt = now
+	h.UpdatedAt = now
+	_, err = r.db.Collection(hotelInfoCol).InsertOne(ctx, h)
 	if err != nil {
 		return fmt.Errorf("hotel_info Create: %w", err)
 	}
-	id, _ := res.LastInsertId()
-	h.ID = id
 	return nil
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -15,20 +16,19 @@ import (
 func setupTicketHandler(t *testing.T) (*TicketHandler, func()) {
 	t.Helper()
 	cfg := config.Load()
-	db, err := config.OpenDB(cfg)
+	cfg.MongoDB = testDBName(t)
+	db, closeDB, err := config.ConnectMongo(cfg)
 	if err != nil {
-		t.Skipf("DB not available: %v", err)
+		t.Skipf("MongoDB not available: %v", err)
 	}
-	// clean
-	db.Exec("SET FOREIGN_KEY_CHECKS=0")
-	db.Exec("TRUNCATE TABLE ticket_assignments")
-	db.Exec("TRUNCATE TABLE tickets")
-	db.Exec("SET FOREIGN_KEY_CHECKS=1")
 	repo := repository.NewTicketRepository(db)
 	guestRepo := repository.NewGuestRepository(db)
 	svc := ticketservice.NewService(repo, guestRepo)
 	h := NewTicketHandler(svc)
-	cleanup := func() { db.Close() }
+	cleanup := func() {
+		_ = db.Drop(context.Background())
+		closeDB()
+	}
 	return h, cleanup
 }
 

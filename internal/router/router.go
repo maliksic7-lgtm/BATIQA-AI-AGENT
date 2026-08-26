@@ -1,11 +1,12 @@
 package router
 
 import (
-	"database/sql"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"batiqa-ai/internal/handler"
 	"batiqa-ai/internal/repository"
@@ -39,8 +40,8 @@ func New() http.Handler {
 }
 
 // NewWithDB creates router with Phase 4 ticket & chat endpoints plus Phase 5 hotel-info.
-// Flow: Handler -> Service -> Repository -> MySQL per DATABASE.md
-func NewWithDB(db *sql.DB) http.Handler {
+// Flow: Handler -> Service -> Repository -> MongoDB per DATABASE.md
+func NewWithDB(db *mongo.Database) http.Handler {
 	mux := http.NewServeMux()
 
 	// Health

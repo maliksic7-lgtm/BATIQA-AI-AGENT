@@ -9,15 +9,13 @@ import (
 )
 
 // Config holds all environment-based configuration.
-// Phase 2 adds MySQL database settings.
 type Config struct {
 	Port               string
 	Env                string
 	LogLevel           string
-	DBDSN              string
+	MongoURI           string
+	MongoDB            string
 	GeminiKey          string
-	DBMaxOpen          int
-	DBMaxIdle          int
 	CORSAllowedOrigins []string
 }
 
@@ -31,15 +29,10 @@ func Load() *Config {
 		Port:               envOrDefault("PORT", "8080"),
 		Env:                envOrDefault("ENV", "development"),
 		LogLevel:           envOrDefault("LOG_LEVEL", "info"),
-		DBDSN:              os.Getenv("DB_DSN"),
+		MongoURI:           envOrDefault("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDB:            envOrDefault("DB_NAME", "batiqa_ai"),
 		GeminiKey:          os.Getenv("GEMINI_API_KEY"),
-		DBMaxOpen:          envIntOrDefault("DB_MAX_OPEN_CONNS", 25),
-		DBMaxIdle:          envIntOrDefault("DB_MAX_IDLE_CONNS", 5),
 		CORSAllowedOrigins: parseOrigins(os.Getenv("CORS_ALLOWED_ORIGINS")),
-	}
-	// Default DBDSN for local dev only if not set (empty password, not hardcoded secret)
-	if cfg.DBDSN == "" {
-		cfg.DBDSN = "root:@tcp(127.0.0.1:3306)/batiqa_ai?parseTime=true&charset=utf8mb4&loc=Local"
 	}
 	return cfg
 }
