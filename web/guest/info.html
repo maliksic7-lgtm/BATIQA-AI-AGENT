@@ -3,53 +3,66 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hotel Info — BATIQA</title>
+  <title>Hotel Information — BATIQA Pekanbaru</title>
   <link rel="stylesheet" href="/css/guest.css">
 </head>
 <body>
-  <header class="header">
-    <div class="header__inner">
-      <a href="/" class="logo">BATIQA<span>HOTELS</span></a>
-      <div class="header__room" id="roomBadge" style="display:none"></div>
+
+  <!-- ===== PAGE HERO ===== -->
+  <section class="page-hero on-dark">
+    <div class="container container--narrow">
+      <a href="/" class="page-hero__back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Kembali ke Beranda
+      </a>
+      <span class="kicker kicker--light">BATIQA Pekanbaru</span>
+      <h1>Hotel Information</h1>
+      <p class="page-hero__sub">Semua yang perlu Anda ketahui selama menginap — sarapan, WiFi, kolam renang, gym, hingga rekomendasi kuliner di sekitar hotel.</p>
     </div>
-  </header>
+  </section>
 
-  <main class="container" style="padding-bottom:72px;">
-    <div style="display:flex; align-items:center; gap:10px; margin:16px 0 12px;">
-      <a href="/" style="text-decoration:none; color:var(--muted);">← Home</a>
-      <h1 style="font-size:18px; margin:0; color:var(--navy);">Hotel Information</h1>
-    </div>
+  <main class="subpage-body">
+    <div class="container container--narrow">
 
-    <div id="filter" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:8px; scrollbar-width:none;">
-      <button class="chip active" data-cat="">All</button>
-      <button class="chip" data-cat="BREAKFAST">Breakfast</button>
-      <button class="chip" data-cat="WIFI">WiFi</button>
-      <button class="chip" data-cat="POOL">Pool</button>
-      <button class="chip" data-cat="GYM">Gym</button>
-      <button class="chip" data-cat="RESTAURANT">Restaurant</button>
-    </div>
+      <span class="header__room" id="roomBadge" style="display:none"></span>
 
-    <div id="loading" class="loading"><div class="spinner"></div> Loading...</div>
-    <div id="error" class="error" style="display:none;"><span id="errorText"></span><button class="error__retry" onclick="loadInfo()">Retry</button></div>
-    <div id="empty" class="empty" style="display:none;"><div class="empty__icon">ℹ️</div><p class="empty__title">No information</p></div>
-    <div id="list" class="grid" style="display:none;"></div>
+      <div id="filter" class="chip-row" style="margin-bottom:26px;" role="group" aria-label="Filter kategori informasi">
+        <button class="chip active" data-cat="">All</button>
+        <button class="chip" data-cat="BREAKFAST">Breakfast</button>
+        <button class="chip" data-cat="WIFI">WiFi</button>
+        <button class="chip" data-cat="POOL">Pool</button>
+        <button class="chip" data-cat="GYM">Gym</button>
+        <button class="chip" data-cat="RESTAURANT">Restaurant</button>
+      </div>
 
-    <h2 class="section__title" id="recommendations">Nearby Recommendations</h2>
-    <div id="recLoading" class="loading"><div class="spinner"></div> Loading recommendations...</div>
-    <div id="recList" class="grid" style="display:none;"></div>
+      <div id="loading" class="loading"><div class="spinner"></div> Memuat informasi…</div>
+      <div id="error" class="error" style="display:none;"><span id="errorText"></span><button class="error__retry" onclick="loadInfo()">Retry</button></div>
+      <div id="empty" class="empty" style="display:none;">
+        <div class="empty__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></svg>
+        </div>
+        <p class="empty__title">Informasi tidak ditemukan</p>
+        <p class="empty__desc">Belum ada informasi untuk kategori ini. Coba pilih kategori lain.</p>
+      </div>
+      <div id="list" class="grid" style="display:none;"></div>
 
-    <div class="card mt-16" style="text-align:center;">
-      <p style="font-size:13px; color:var(--muted); margin:0 0 10px;">Need help? Ask AI</p>
-      <a href="/guest/chat.html" class="btn">Ask BATIQA AI</a>
+      <div class="section-subhead" id="recommendations">
+        <h2>Nearby Recommendations</h2>
+      </div>
+      <div id="recLoading" class="loading"><div class="spinner"></div> Memuat rekomendasi…</div>
+      <div id="recList" class="grid" style="display:none;"></div>
+
+      <div class="cta-banner">
+        <div>
+          <h3>Butuh bantuan lain?</h3>
+          <p>BATIQA AI siap membantu 24/7 — layanan kamar, laporan kendala, atau pertanyaan apa pun.</p>
+        </div>
+        <a href="/guest/chat.html" class="btn btn--gold">Ask BATIQA AI
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
     </div>
   </main>
-
-  <nav class="nav">
-    <a href="/">Home</a>
-    <a href="/guest/chat.html">Chat</a>
-    <a href="/guest/requests.html">Requests</a>
-    <a href="/guest/info.html" class="active" aria-current="page">Info</a>
-  </nav>
 
   <script src="/js/api.js"></script>
   <script src="/js/info.js"></script>

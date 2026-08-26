@@ -3,67 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BATIQA Guest — Home</title>
-  <link rel="stylesheet" href="/css/guest.css">
+  <title>BATIQA Hotels — Guest Assistant</title>
+  <link rel="canonical" href="/">
+  <meta http-equiv="refresh" content="0; url=/">
+  <script>location.replace('/' + location.search + location.hash);</script>
 </head>
 <body>
-  <header class="header">
-    <div class="header__inner">
-      <a href="/" class="logo">BATIQA<span>HOTELS</span></a>
-      <div class="header__room" id="roomBadge" style="display:none"></div>
-    </div>
-  </header>
-  <main class="container">
-    <section class="hero">
-      <h1 class="hero__title">Welcome 👋</h1>
-      <p class="hero__subtitle">How can we help you today?</p>
-    </section>
-
-    <a href="/guest/chat.html" class="card card--ai" id="askAI">
-      <div class="card--ai__icon">✦</div>
-      <div>
-        <p class="card--ai__title">Ask BATIQA AI</p>
-        <p class="card--ai__desc">Ask anything about hotel</p>
-      </div>
-    </a>
-
-    <h2 class="section__title">Quick Services</h2>
-    <div class="grid grid--2">
-      <a href="/guest/chat.html?quick=towel" class="btn-service"><div class="btn-service__icon">🧹</div><div class="btn-service__label">Housekeeping</div><div class="btn-service__desc">Towels • Cleaning</div></a>
-      <a href="/guest/chat.html?quick=ac" class="btn-service"><div class="btn-service__icon">🔧</div><div class="btn-service__label">Report Problem</div><div class="btn-service__desc">AC • TV • WiFi</div></a>
-      <a href="/guest/requests.html" class="btn-service"><div class="btn-service__icon">📋</div><div class="btn-service__label">My Requests</div><div class="btn-service__desc">Track status</div></a>
-      <a href="/guest/info.html" class="btn-service"><div class="btn-service__icon">ℹ️</div><div class="btn-service__label">Hotel Info</div><div class="btn-service__desc">Breakfast • WiFi</div></a>
-    </div>
-
-    <h2 class="section__title">Explore</h2>
-    <div class="grid grid--2">
-      <a href="/guest/info.html#recommendations" class="btn-service"><div class="btn-service__icon">🍜</div><div class="btn-service__label">Food</div><div class="btn-service__desc">Nearby • Budget</div></a>
-      <a href="/guest/info.html#recommendations" class="btn-service"><div class="btn-service__icon">📍</div><div class="btn-service__label">Nearby</div><div class="btn-service__desc">Cafe • Mall • ATM</div></a>
-    </div>
-  </main>
-
-  <nav class="nav">
-    <a href="/guest/" class="active">Home</a>
-    <a href="/guest/chat.html">Chat</a>
-    <a href="/guest/requests.html">Requests</a>
-    <a href="/guest/info.html">Info</a>
-  </nav>
-
-  <script src="/js/api.js"></script>
-  <script>
-    const params=new URLSearchParams(location.search);
-    const room=params.get('room')||localStorage.getItem('batiqa_room');
-    if(room){
-      localStorage.setItem('batiqa_room',room);
-      document.getElementById('roomBadge').textContent='Room '+room;
-      document.getElementById('roomBadge').style.display='block';
-      document.querySelectorAll('a[href^="/guest"]').forEach(a=>{
-        const u=new URL(a.href, location.origin);
-        if(!u.searchParams.get('room')) u.searchParams.set('room',room);
-        a.href=u.pathname+u.search;
-      });
-    }
-    if(!localStorage.getItem('batiqa_session')) localStorage.setItem('batiqa_session','guest-'+Date.now());
-  </script>
+  <p style="font-family:sans-serif; padding:24px;">Mengalihkan ke halaman utama… <a href="/">Lanjutkan secara manual</a>.</p>
 </body>
 </html>

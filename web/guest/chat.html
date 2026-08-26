@@ -3,50 +3,61 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat — BATIQA AI</title>
+  <title>BATIQA Assistant — Chat AI</title>
   <link rel="stylesheet" href="/css/guest.css">
 </head>
 <body>
   <div class="chat">
-    <div class="chat__header">
-      <a href="/" style="text-decoration:none; color:var(--muted); font-size:18px;" aria-label="Back to home">←</a>
-      <div class="chat__avatar">B</div>
-      <div>
-        <div class="chat__name">BATIQA AI</div>
-        <div class="chat__status">● Online • Hospitality Assistant</div>
+    <header class="chat__header">
+      <div class="chat__header-inner">
+        <a href="/" class="chat__back" aria-label="Kembali ke halaman utama">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </a>
+        <div class="chat__avatar" aria-hidden="true">B</div>
+        <div>
+          <div class="chat__name">BATIQA Assistant</div>
+          <div class="chat__status">Online • Hospitality Assistant</div>
+        </div>
+        <div class="chat__room" id="roomLabel"></div>
       </div>
-      <div style="margin-left:auto; font-size:11px; color:var(--muted);" id="roomLabel"></div>
-    </div>
+    </header>
 
-    <div class="chat__messages" id="messages" aria-live="polite" aria-label="Conversation">
+    <div class="chat__messages" id="messages" aria-live="polite" aria-label="Percakapan">
       <!-- Welcome bubble -->
-      <div class="bubble bubble--ai" role="article" aria-label="BATIQA AI welcome">
-        <div style="font-weight:500;">Halo! Selamat datang di BATIQA Hotels.</div>
-        <div style="margin-top:4px; font-size:13px; color:var(--muted);">Ada yang bisa saya bantu? Try asking about breakfast, towels, or AC.</div>
+      <div class="bubble bubble--ai" role="article" aria-label="Sambutan BATIQA AI">
+        <div style="font-family:'Playfair Display',Georgia,serif; font-weight:700; font-size:16px; color:var(--navy); margin-bottom:4px;">Halo! Selamat datang di BATIQA Hotels.</div>
+        <div style="font-size:13.5px; color:var(--muted);">Ada yang bisa saya bantu? Coba tanyakan soal sarapan, minta handuk, atau lapor AC.</div>
         <div class="bubble__meta">BATIQA AI • Just now</div>
       </div>
     </div>
 
-    <div class="chat__suggestions" id="suggestions" aria-label="Quick suggestions">
-      <button class="chip" data-msg="What's the breakfast schedule?">What's the breakfast schedule?</button>
-      <button class="chip" data-msg="I need 2 towels.">I need 2 towels.</button>
-      <button class="chip" data-msg="My AC isn't working.">My AC isn't working.</button>
-      <button class="chip" data-msg="Recommend dinner under Rp100.000.">Recommend dinner under Rp100.000.</button>
-    </div>
+    <div class="chat__dock">
+      <div class="chat__dock-inner">
+        <div id="loading" class="loading" style="display:none;" aria-live="polite">
+          <span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          BATIQA AI is typing…
+        </div>
+        <div id="errorBar" class="error" style="display:none;">
+          <span id="errorText">Failed to send</span>
+          <button class="error__retry" id="retryBtn">Retry</button>
+        </div>
 
-    <div id="loading" class="loading" style="display:none;" aria-live="polite">
-      <div class="spinner" aria-hidden="true"></div> BATIQA AI is typing...
-    </div>
-    <div id="errorBar" class="error" style="display:none; margin:8px 16px;">
-      <span id="errorText">Failed to send</span>
-      <button class="error__retry" id="retryBtn">Retry</button>
-    </div>
+        <div class="chat__suggestions" id="suggestions" aria-label="Saran cepat">
+          <button class="chip" data-msg="What's the breakfast schedule?">What's the breakfast schedule?</button>
+          <button class="chip" data-msg="I need 2 towels.">I need 2 towels.</button>
+          <button class="chip" data-msg="My AC isn't working.">My AC isn't working.</button>
+          <button class="chip" data-msg="Recommend dinner under Rp100.000.">Recommend dinner under Rp100.000.</button>
+        </div>
 
-    <form class="chat__input" id="chatForm" aria-label="Send message">
-      <label for="msgInput" class="sr-only">Type your message</label>
-      <textarea id="msgInput" class="chat__field" placeholder="Ask about hotel, request service..." rows="1" aria-label="Type your message" autocomplete="off" enterkeyhint="send"></textarea>
-      <button type="submit" class="chat__send" id="sendBtn" aria-label="Send message">↑</button>
-    </form>
+        <form class="chat__input" id="chatForm" aria-label="Kirim pesan">
+          <label for="msgInput" class="sr-only">Tulis pesan Anda</label>
+          <textarea id="msgInput" class="chat__field" placeholder="Tanyakan apa saja — layanan kamar, info hotel…" rows="1" aria-label="Tulis pesan Anda" autocomplete="off" enterkeyhint="send"></textarea>
+          <button type="submit" class="chat__send" id="sendBtn" aria-label="Kirim pesan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+        </form>
+      </div>
+    </div>
   </div>
 
   <script src="/js/api.js"></script>

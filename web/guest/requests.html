@@ -3,45 +3,54 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Requests — BATIQA</title>
+  <title>My Requests — BATIQA Pekanbaru</title>
   <link rel="stylesheet" href="/css/guest.css">
 </head>
 <body>
-  <header class="header">
-    <div class="header__inner">
-      <a href="/" class="logo">BATIQA<span>HOTELS</span></a>
-      <div class="header__room" id="roomBadge" style="display:none"></div>
-    </div>
-  </header>
 
-  <main class="container" style="padding-bottom:72px;">
-    <div style="display:flex; align-items:center; gap:10px; margin:18px 0 14px;">
-      <a href="/" style="text-decoration:none; color:var(--muted); font-size:14px; padding:6px 8px; border-radius:6px; border:1px solid transparent;" onfocus="this.style.borderColor='var(--navy)'" onblur="this.style.borderColor='transparent'">← Home</a>
-      <h1 style="font-size:19px; margin:0; color:var(--navy); font-weight:700; letter-spacing:-0.01em;">My Requests</h1>
-      <button id="refreshBtn" class="chip" style="margin-left:auto; font-weight:500;" aria-label="Refresh requests">↻ Refresh</button>
+  <!-- ===== PAGE HERO ===== -->
+  <section class="page-hero on-dark">
+    <div class="container container--narrow" style="display:flex; flex-wrap:wrap; align-items:flex-end; gap:18px;">
+      <div style="flex:1 1 320px;">
+        <a href="/" class="page-hero__back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Kembali ke Beranda
+        </a>
+        <span class="kicker kicker--light">Service Tracker</span>
+        <h1>My Requests</h1>
+        <p class="page-hero__sub">Pantau status semua permintaan Anda — dari Open, In Progress, hingga Resolved. Halaman ini diperbarui otomatis setiap 15 detik.</p>
+      </div>
+      <span class="header__room" id="roomBadge" style="display:none; margin-bottom:6px;"></span>
     </div>
+  </section>
 
-    <div id="loading" class="loading"><div class="spinner"></div> Loading requests...</div>
-    <div id="error" class="error" style="display:none;">
-      <span id="errorText"></span>
-      <button class="error__retry" onclick="loadTickets()">Retry</button>
-    </div>
-    <div id="empty" class="empty" style="display:none;">
-      <div class="empty__icon">📋</div>
-      <p class="empty__title">No requests yet</p>
-      <p class="empty__desc">Your service and maintenance requests will appear here.</p>
-      <a href="/guest/chat.html" class="btn mt-16" style="max-width:240px; margin:16px auto 0;">Ask BATIQA AI</a>
-    </div>
+  <main class="subpage-body">
+    <div class="container container--narrow">
 
-    <div id="list" class="grid" style="display:none;"></div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:22px;">
+        <span class="kicker">Daftar Tiket</span>
+        <button id="refreshBtn" class="chip" aria-label="Muat ulang daftar permintaan">↻ Refresh</button>
+      </div>
+
+      <div id="loading" class="loading"><div class="spinner"></div> Memuat permintaan…</div>
+      <div id="error" class="error" style="display:none;">
+        <span id="errorText"></span>
+        <button class="error__retry" onclick="loadTickets()">Retry</button>
+      </div>
+      <div id="empty" class="empty" style="display:none;">
+        <div class="empty__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+        </div>
+        <p class="empty__title">Belum ada permintaan</p>
+        <p class="empty__desc">Permintaan layanan dan laporan kendala Anda akan tampil di sini setelah dibuat lewat chat.</p>
+        <a href="/guest/chat.html" class="btn mt-16" style="width:auto;">Ask BATIQA AI
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+
+      <div id="list" class="grid tickets-grid" style="display:none;"></div>
+    </div>
   </main>
-
-  <nav class="nav" aria-label="Primary">
-    <a href="/">Home</a>
-    <a href="/guest/chat.html">Chat</a>
-    <a href="/guest/requests.html" class="active" aria-current="page">Requests</a>
-    <a href="/guest/info.html">Info</a>
-  </nav>
 
   <script src="/js/api.js"></script>
   <script src="/js/requests.js"></script>

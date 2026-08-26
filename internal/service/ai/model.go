@@ -26,11 +26,19 @@ type RawAIOutput struct {
 	Response string                 `json:"response"`
 }
 
+// Turn is one message in conversation history for context.
+type Turn struct {
+	Role    string // "user" or "assistant"
+	Content string
+}
+
 // Request to AI service
 type Request struct {
 	SessionID  string
-	RoomNumber string // may be empty (missing)
-	Message    string
+	RoomNumber string   // may be empty (missing)
+	Message    string   // latest guest message
+	History    []Turn   // prior turns (oldest first), excludes Message
+	Facts      []string // verified hotel/recommendation facts the AI may cite verbatim
 }
 
 // Known action types

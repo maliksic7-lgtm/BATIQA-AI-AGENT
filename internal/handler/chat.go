@@ -82,17 +82,18 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Persist guest session (upsert) - room not invented.
-	// Non-fatal: guest table is auxiliary; never block the chat flow on it.
+	// Non-fatal: guest data is auxiliary; never block the chat flow on it.
 	var roomPtr *string
 	if req.RoomNumber != "" {
 		roomPtr = &req.RoomNumber
 	}
-	lang := ai.DetectLanguage(req.Message)
-	if _, err := h.guests.Upsert(req.SessionID, roomPtr, lang); err != nil {
+	if _, err := h.guests.Upsert(req.SessionID, roomPtr, ai.DetectLanguage(req.Message)); err != nil {
 		fmt.Printf("guest upsert failed (non-fatal): %v\n", err)
 	}
 
-	// Store user conversation (best effort)
+	// Load conversation history for context (multi-turn chat) BEFORE saving the
+	// current message, then persist it. Best-effort: history is optional.
+	historyTurns := loadHistory(h.convs, req.SessionID, 10)
 	_ = h.convs.Create(&model.Conversation{
 		SessionID: req.SessionID,
 		Role:      model.RoleUser,
@@ -100,11 +101,15 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Intent:    nil,
 	})
 
-	// Call AI service (with validation, fallback, no crash)
+	// Call AI service (with validation, fallback, no crash).
+	// Verified hotel facts + recommendations are injected so the LLM can compose
+	// natural answers from data instead of templated text per AI KNOWLEDGE SOURCE.md.
 	aiReq := ai.Request{
 		SessionID:  req.SessionID,
 		RoomNumber: req.RoomNumber,
 		Message:    req.Message,
+		History:    historyTurns,
+		Facts:      h.verifiedFacts(),
 	}
 	aiResult, err := h.ai.Process(r.Context(), aiReq)
 	if err != nil || aiResult == nil {
@@ -118,23 +123,24 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// For hotel info intents, retrieve verified data from DB per AI KNOWLEDGE SOURCE.md (do not invent)
-	if h.hotelInfos != nil && isInfoIntent(aiResult.Intent) {
-		if infoResp := h.getHotelInfoResponse(aiResult.Intent, aiResult.Language); infoResp != "" {
-			aiResult.Response = infoResp
-		} else {
-			// If no data, use fallback per spec
-			if aiResult.Language == ai.LangEN {
-				aiResult.Response = "Sorry, I don't have that information yet. Please contact Front Office."
+	// Rule-based provider has no access to injected facts, so answers are composed
+	// from DB templates here. With Gemini active we trust its fact-grounded phrasing.
+	if h.ai.IsRuleBased() {
+		if h.hotelInfos != nil && isInfoIntent(aiResult.Intent) {
+			if infoResp := h.getHotelInfoResponse(aiResult.Intent, aiResult.Language); infoResp != "" {
+				aiResult.Response = wrapInfo(infoResp, aiResult.Language)
 			} else {
-				aiResult.Response = "Maaf, saya belum memiliki informasi tersebut. Silakan hubungi Front Office."
+				// If no data, use fallback per spec
+				if aiResult.Language == ai.LangEN {
+					aiResult.Response = "Sorry, I don't have that information yet. Please contact Front Office."
+				} else {
+					aiResult.Response = "Maaf, saya belum memiliki informasi tersebut. Silakan hubungi Front Office."
+				}
 			}
 		}
-	}
-
-	// For recommendation intents, retrieve verified local data from DB per RECOMMENDATION RULES.md
-	if h.recs != nil && isRecommendationIntent(aiResult.Intent) && aiResult.Action.Type == ai.ActionAnswer {
-		h.enrichRecommendationResponse(aiResult)
+		if h.recs != nil && isRecommendationIntent(aiResult.Intent) && aiResult.Action.Type == ai.ActionAnswer {
+			h.enrichRecommendationResponse(aiResult)
+		}
 	}
 
 	// Store assistant conversation (best effort)
@@ -197,6 +203,77 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		TicketID:       ticketID,
 	}
 	WriteJSON(w, http.StatusOK, resp)
+}
+
+// loadHistory returns the last N conversation turns for a session (oldest first),
+// mapped to AI Turn roles. Errors are swallowed: history is best-effort context.
+func loadHistory(convs *repository.ConversationRepository, sessionID string, n int) []ai.Turn {
+	if convs == nil || sessionID == "" {
+		return nil
+	}
+	msgs, err := convs.ListBySession(sessionID, 100)
+	if err != nil || len(msgs) == 0 {
+		return nil
+	}
+	// Take only the last n messages
+	if len(msgs) > n {
+		msgs = msgs[len(msgs)-n:]
+	}
+	turns := make([]ai.Turn, 0, len(msgs))
+	for _, m := range msgs {
+		role := "user"
+		if m.Role == model.RoleAssistant {
+			role = "assistant"
+		} else if m.Role != model.RoleUser {
+			continue // skip system entries
+		}
+		turns = append(turns, ai.Turn{Role: role, Content: m.Message})
+	}
+	return turns
+}
+
+// verifiedFacts collects hotel information and local recommendations from the DB
+// as plain-text lines the LLM may quote. Never includes internal IDs.
+func (h *ChatHandler) verifiedFacts() []string {
+	var facts []string
+	if h.hotelInfos != nil {
+		if items, err := h.hotelInfos.ListActive(nil); err == nil {
+			for _, it := range items {
+				facts = append(facts, fmt.Sprintf("HOTEL | %s | %s", it.Category, it.Content))
+			}
+		}
+	}
+	if h.recs != nil {
+		if items, err := h.recs.ListActive(nil, nil); err == nil {
+			count := 0
+			for _, r := range items {
+				if count >= 8 {
+					break
+				}
+				line := fmt.Sprintf("RECOMMENDATION | %s (%s)", r.Name, r.Category)
+				if r.Description != nil && *r.Description != "" {
+					line += fmt.Sprintf(" - %s", *r.Description)
+				}
+				if r.PriceMin != nil && r.PriceMax != nil && *r.PriceMax > 0 {
+					line += fmt.Sprintf(" | price Rp%d-Rp%d", *r.PriceMin, *r.PriceMax)
+				}
+				if r.DistanceKm != nil {
+					line += fmt.Sprintf(" | distance %.1f km", *r.DistanceKm)
+				}
+				facts = append(facts, line)
+				count++
+			}
+		}
+	}
+	return facts
+}
+
+// wrapInfo softens template answers from the rule-based provider.
+func wrapInfo(fact, lang string) string {
+	if lang == ai.LangEN {
+		return fact + "\n\nIs there anything else I can help you with?"
+	}
+	return fact + "\n\nAda lagi yang bisa saya bantu?"
 }
 
 func isInfoIntent(intent string) bool {

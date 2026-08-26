@@ -53,6 +53,13 @@ func NewServiceWithProvider(primary, fallback Provider) *Service {
 	return &Service{primary: primary, fallback: fallback}
 }
 
+// IsRuleBased reports whether the primary provider is the deterministic
+// rule-based mock (no LLM). Handlers use this to decide whether to apply
+// template overrides or trust the LLM's natural composition.
+func (s *Service) IsRuleBased() bool {
+	return s.primary != nil && s.primary.Name() == "mock"
+}
+
 // Process is the main entry: transforms natural language to structured AIResult with validation.
 // It never panics; on provider failure returns controlled fallback (UNKNOWN + clarification).
 func (s *Service) Process(ctx context.Context, req Request) (result *AIResult, err error) {
@@ -74,10 +81,10 @@ func (s *Service) Process(ctx context.Context, req Request) (result *AIResult, e
 		}, nil
 	}
 
-	// Create context with timeout 8s if not set
+	// Create context with timeout if not set (LLM latency + retry backoff needs headroom)
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 8*time.Second)
+		ctx, cancel = context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
 	}
 

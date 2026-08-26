@@ -7,32 +7,51 @@
   <link rel="stylesheet" href="/css/staff.css">
 </head>
 <body>
-  <div class="login-wrap">
-    <div class="login-card">
-      <h1>BATIQA<span style="font-weight:400; font-size:12px; letter-spacing:0.12em; color:var(--muted); display:block;">OPERATIONS</span></h1>
-      <p class="sub">Staff Operations Dashboard</p>
+  <div class="login">
 
-      <div id="error" class="error" role="alert"></div>
+    <!-- Panel kiri: brand navy -->
+    <aside class="login__panel on-dark" aria-hidden="false">
+      <div class="login__brand">
+        <h1 class="login__wordmark">BATIQA<small>OPERATIONS</small></h1>
+      </div>
+      <div class="login__tagline">
+        <h2>Satu dashboard untuk seluruh operasional harian.</h2>
+        <p>Kelola tiket housekeeping &amp; engineering, pantau status real-time, dan pastikan setiap tamu dilayani dengan cepat.</p>
+      </div>
+      <div class="login__address">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        Jl. Jendral Sudirman No. 17, Pekanbaru
+      </div>
+    </aside>
 
-      <form id="loginForm" aria-label="Staff login">
-        <div class="form-group">
-          <label for="email">Email</label>
-          <input id="email" type="email" placeholder="admin@batiqa.com" required autocomplete="username" aria-required="true">
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input id="password" type="password" placeholder="••••••••" required autocomplete="current-password" aria-required="true">
-        </div>
-        <button type="submit" class="btn" id="loginBtn">Sign In</button>
-      </form>
+    <!-- Panel kanan: form -->
+    <main class="login__main">
+      <div class="login-box">
+        <h1>Staff Sign In</h1>
+        <p class="sub">Masuk untuk mengakses Operations Dashboard</p>
 
-      <p class="hint">
-        Demo credentials:<br>
-        <strong>admin@batiqa.com</strong> / batiqa123 (ADMIN)<br>
-        <strong>hk@batiqa.com</strong> / batiqa123 (HOUSEKEEPING)<br>
-        <strong>eng@batiqa.com</strong> / batiqa123 (ENGINEERING)
-      </p>
-    </div>
+        <div id="error" class="error" role="alert"></div>
+
+        <form id="loginForm" aria-label="Login staf">
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input id="email" type="email" placeholder="nama@batiqa.com" required autocomplete="username" aria-required="true">
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input id="password" type="password" placeholder="••••••••" required autocomplete="current-password" aria-required="true">
+          </div>
+          <button type="submit" class="btn" id="loginBtn">Sign In</button>
+        </form>
+
+        <p class="hint">
+          <strong style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--gold-text);">Demo access</strong><br><br>
+          ADMIN — <strong>admin@batiqa.com</strong> / batiqa123<br>
+          HOUSEKEEPING — <strong>hk@batiqa.com</strong> / batiqa123<br>
+          ENGINEERING — <strong>eng@batiqa.com</strong> / batiqa123
+        </p>
+      </div>
+    </main>
   </div>
 
   <script>

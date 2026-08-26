@@ -31,8 +31,8 @@ func main() {
 	srv := &http.Server{
 		Addr:         cfg.Addr(),
 		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 45 * time.Second, // LLM chat responses can take a while
 		IdleTimeout:  60 * time.Second,
 	}
 
