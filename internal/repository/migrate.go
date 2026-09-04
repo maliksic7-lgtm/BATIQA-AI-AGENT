@@ -83,6 +83,10 @@ func ensureIndexes(ctx context.Context, db *mongo.Database) error {
 		},
 		conversationsCol: {
 			mongo.IndexModel{Keys: bson.D{{Key: "session_id", Value: 1}, {Key: "created_at", Value: -1}}},
+			// TTL: Mongo auto-removes chats older than 24h so history never
+			// accumulates and weighs down the DB. TTL must be a single-field
+			// index on a BSON date (created_at). Deletion runs ~every 60s.
+			mongo.IndexModel{Keys: bson.M{"created_at": 1}, Options: options.Index().SetExpireAfterSeconds(24 * 3600)},
 		},
 		ticketsCol: {
 			mongo.IndexModel{Keys: bson.M{"ticket_number": 1}, Options: options.Index().SetUnique(true)},
