@@ -52,4 +52,5 @@ const (
 const (
 	LangID = "id"
 	LangEN = "en"
+	LangZH = "zh"
 )

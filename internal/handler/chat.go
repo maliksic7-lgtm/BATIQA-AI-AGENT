@@ -312,7 +312,9 @@ func (h *ChatHandler) verifiedFacts() []string {
 
 // wrapInfo softens template answers from the rule-based provider.
 func wrapInfo(fact, lang string) string {
-	if lang == ai.LangEN {
+	// zh -> English suffix (the DB fact content itself is Indonesian; the suffix
+	// stays neutral so a Chinese speaker reading English is not further confused).
+	if lang == ai.LangEN || lang == ai.LangZH {
 		return fact + "\n\nIs there anything else I can help you with?"
 	}
 	return fact + "\n\nAda lagi yang bisa saya bantu?"

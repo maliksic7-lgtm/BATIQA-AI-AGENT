@@ -210,7 +210,10 @@ func classifyIntent(msg, lang string) string {
 }
 
 func buildResponse(intent, lang string, entities map[string]interface{}, roomNumber string) string {
-	// Language-aware responses
+	// Language-aware responses. The rule-based demo provider has id/en branches;
+	// Chinese (zh) falls back to the English branch (widely understood) so a
+	// Chinese-speaking guest never receives an Indonesian reply. Gemini handles
+	// true zh templating when configured.
 	isID := lang == LangID
 
 	switch intent {

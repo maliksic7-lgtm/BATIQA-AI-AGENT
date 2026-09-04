@@ -29,10 +29,10 @@ func Validate(raw *RawAIOutput, providedRoom string) (*AIResult, error) {
 
 	// Validate language
 	lang := strings.ToLower(strings.TrimSpace(raw.Language))
-	if lang != LangID && lang != LangEN {
+	if lang != LangID && lang != LangEN && lang != LangZH {
 		// fallback to detected language, not error
 		lang = DetectLanguage(raw.Response)
-		if lang != LangID && lang != LangEN {
+		if lang != LangID && lang != LangEN && lang != LangZH {
 			lang = LangID
 		}
 	}
@@ -182,9 +182,12 @@ func Validate(raw *RawAIOutput, providedRoom string) (*AIResult, error) {
 
 	// Ensure response is not empty
 	if strings.TrimSpace(result.Response) == "" {
-		if lang == LangEN {
+		switch lang {
+		case LangEN:
 			result.Response = "How can I help you?"
-		} else {
+		case LangZH:
+			result.Response = "您好，有什么可以帮您？"
+		default:
 			result.Response = "Ada yang bisa saya bantu?"
 		}
 	}

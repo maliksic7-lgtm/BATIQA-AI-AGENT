@@ -5,11 +5,40 @@ import (
 	"unicode"
 )
 
+// isCJK reports whether a rune is within the common Chinese/Japanese/Korean
+// blocks (Han unified + compatibility). Used to detect Chinese-script input
+// without false-positive hits from box-drawing or emoji in the ASCII/ID checks.
+func isCJK(r rune) bool {
+	// CJK Unified Ideographs, Ext-A, compatibility ideographs
+	if r >= 0x4E00 && r <= 0x9FFF {
+		return true
+	}
+	if r >= 0x3400 && r <= 0x4DBF {
+		return true
+	}
+	if r >= 0xF900 && r <= 0xFAFF {
+		return true
+	}
+	// Fullwidth forms (ｆｕｌｌｗｉｄｔｈ) plus halfwidth katakana are rare in
+	// hotel chat; ignore to keep detection conservative.
+	return false
+}
+
 // DetectLanguage detects guest language per LANGUAGE BEHAVIOR.md
 // Simple heuristic: if message contains Indonesian keywords, return "id", else "en"
 // Preserves guest language unless explicitly asked to translate.
 func DetectLanguage(message string) string {
 	lower := strings.ToLower(message)
+
+	// Chinese script is unambiguous: if the message contains any Han ideograph,
+	// treat it as Chinese (zh). Checked first so CJK never falls through to the
+	// ASCII heuristic that would otherwise label it "en".
+	for _, r := range lower {
+		if isCJK(r) {
+			return LangZH
+		}
+	}
+
 	// Strong Indonesian markers (unambiguous)
 	strongID := []string{
 		"saya", "kamar", "tolong", "minta", "antar", "berapa", "jam", "sampai",

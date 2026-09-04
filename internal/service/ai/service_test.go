@@ -17,6 +17,8 @@ func TestLanguageDetection(t *testing.T) {
 		{"What's the breakfast schedule?", LangEN},
 		{"Hi", LangEN},
 		{"Terima kasih", LangID},
+		{"我的空调坏了", LangZH},
+		{"你好，请问早餐时间？", LangZH},
 	}
 	for _, tt := range tests {
 		got := DetectLanguage(tt.msg)

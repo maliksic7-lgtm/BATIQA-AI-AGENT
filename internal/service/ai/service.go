@@ -137,12 +137,12 @@ func langFromReq(req Request) string {
 }
 
 func fallbackResult(req Request, lang string) *AIResult {
-	if lang != LangEN {
-		lang = LangID
-	}
 	resp := "Maaf, layanan AI sedang mengalami gangguan. Silakan coba kembali beberapa saat lagi."
-	if lang == LangEN {
+	switch lang {
+	case LangEN:
 		resp = "Sorry, AI service is temporarily unavailable. Please try again shortly."
+	case LangZH:
+		resp = "抱歉，AI 服务暂时出现问题，请稍后再试。"
 	}
 	// Per ERROR FLOW.md: fallback response, do not create ticket
 	return &AIResult{
@@ -199,8 +199,11 @@ func (s *Service) ProcessImage(ctx context.Context, req Request, image []byte, m
 
 func fallbackClarifyForImage(lang string) *AIResult {
 	resp := "Maaf, saya belum bisa menganalisis foto ini. Bisakah Anda jelaskan masalahnya dengan teks?"
-	if lang == LangEN {
+	switch lang {
+	case LangEN:
 		resp = "Sorry, I couldn't analyze this photo. Could you describe the issue in text instead?"
+	case LangZH:
+		resp = "抱歉，我暂时无法分析这张照片，您能用文字描述一下问题吗？"
 	}
 	return &AIResult{
 		Intent:   IntentUnknown,
