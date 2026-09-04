@@ -388,6 +388,7 @@
     renderCategoryList('topComplaints', d.top_complaints, 'hbar-fill--high');
     renderCategoryList('topBorrowed', d.top_borrowed, 'hbar-fill--low');
     renderCategoryList('topAsked', d.top_asked, 'hbar-fill--gold');
+    renderCategoryList('topOrdered', d.top_ordered, '');
   }
 
   function renderCategoryList(id, list, fillClass){

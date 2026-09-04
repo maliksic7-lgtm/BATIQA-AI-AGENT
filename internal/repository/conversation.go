@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -112,4 +114,91 @@ func (r *ConversationRepository) TopIntents(limit int) ([]IntentCount, error) {
 		}
 	}
 	return out, nil
+}
+
+// menuItem is a food/drink term the guest may ask for in chat. Label is the
+// display name shown on the dashboard; Keywords are lowercased substrings that
+// match the guest's typed message (FRESQA Bistro menu + common Indonesian terms).
+type menuItem struct {
+	Label    string
+	Keywords []string
+}
+
+// orderedMenu draws from the FRESQA menu and daily specials seeded in DB. In
+// production sourcing depends on the restaurant, but this provides a sensible
+// F&B "most ordered" slice from chat history without a separate orders store.
+var orderedMenu = []menuItem{
+	{"Gulai Ikan Patin", []string{"gulai patin", "gulai ikan patin", "patin"}},
+	{"Ayam Panggang Madu", []string{"ayam panggang", "ayam madu", "panggang madu"}},
+	{"Sate Padang", []string{"sate padang", "sate"}},
+	{"Nasi Uduk", []string{"nasi uduk", "uduk"}},
+	{"Bubur Ayam", []string{"bubur ayam", "bubur"}},
+	{"Omelet", []string{"omelet", "omelette", "omlet"}},
+	{"Roti", []string{"roti", "toast", "bread"}},
+	{"Sereal", []string{"sereal", "cereal"}},
+	{"Kopi", []string{"kopi", "coffee"}},
+	{"Teh", []string{"teh", "tea"}},
+	{"Jus Buah", []string{"jus", "juice"}},
+	{"Air Mineral", []string{"air mineral", "air putih", "mineral water"}},
+}
+
+// TopOrderedItems scans guest (role=user) messages and counts how often each
+// menu item is mentioned, returning the most-requested F&B items. Useful as a
+// restaurant "most ordered" infographic without a dedicated orders store.
+func (r *ConversationRepository) TopOrderedItems(limit int) ([]IntentCount, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	cur, err := r.db.Collection(conversationsCol).Find(
+		ctx,
+		bson.M{"role": model.RoleUser},
+		options.Find().SetProjection(bson.M{"message": 1}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("conversation TopOrderedItems find: %w", err)
+	}
+	defer cur.Close(ctx)
+
+	items := []string{}
+	for cur.Next(ctx) {
+		var row struct {
+			Message string `bson:"message"`
+		}
+		if err := cur.Decode(&row); err != nil || row.Message == "" {
+			continue
+		}
+		items = append(items, row.Message)
+	}
+
+	counts := countOrderedKeywords(items)
+	ordered := make([]IntentCount, 0, len(counts))
+	for label, n := range counts {
+		ordered = append(ordered, IntentCount{Intent: label, Count: int64(n)})
+	}
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Count > ordered[j].Count })
+	if len(ordered) > limit {
+		ordered = ordered[:limit]
+	}
+	return ordered, nil
+}
+
+// countOrderedKeywords scans guest messages and tallies menu-item mentions. It
+// is pure (no DB) so the matching rules are unit-testable in isolation.
+func countOrderedKeywords(messages []string) map[string]int {
+	counts := map[string]int{}
+	for _, msg := range messages {
+		lower := strings.ToLower(msg)
+		for _, item := range orderedMenu {
+			for _, kw := range item.Keywords {
+				if strings.Contains(lower, kw) {
+					counts[item.Label]++
+					break
+				}
+			}
+		}
+	}
+	return counts
 }

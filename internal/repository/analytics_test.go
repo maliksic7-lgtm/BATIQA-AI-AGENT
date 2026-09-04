@@ -23,3 +23,33 @@ func TestInfographicIntentSetsNonEmpty(t *testing.T) {
 		t.Errorf("borrowedIntents is empty")
 	}
 }
+
+// TestCountOrderedKeywordsCountsMentions checks the pure F&B matching rules:
+// a guest message mentioning a menu item is counted once for that item, keys
+// are case-insensitive, and unrelated messages add no count.
+func TestCountOrderedKeywordsCountsMentions(t *testing.T) {
+	msgs := []string{
+		"can I order gulai patin and some iced tea please",
+		"UMA sate padang untuk meja 3",
+		"beri aku 2 omlet dan kopi",
+	}
+	counts := countOrderedKeywords(msgs)
+
+	if counts["Gulai Ikan Patin"] != 1 {
+		t.Errorf("expected Gulai Ikan Patin x1, got %v", counts["Gulai Ikan Patin"])
+	}
+	if counts["Sate Padang"] != 1 {
+		t.Errorf("expected Sate Padang x1, got %v", counts["Sate Padang"])
+	}
+	if counts["Omelet"] != 1 {
+		t.Errorf("expected Omelet x1, got %v", counts["Omelet"])
+	}
+	if counts["Kopi"] != 1 {
+		t.Errorf("expected Kopi x1, got %v", counts["Kopi"])
+	}
+	// "teh" keyword appears in "iced tea"; "patin" already counted once for that
+	// message but "Teh" should also register because the keywords include "tea".
+	if counts["Teh"] != 1 {
+		t.Errorf("expected Teh x1 (iced tea), got %v", counts["Teh"])
+	}
+}

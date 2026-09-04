@@ -23,11 +23,13 @@ type Analytics struct {
 
 // Infographics holds the "most common guest insights" requested by the product
 // brief (see docs/GOALS & the infographics note): what guests complain about,
-// what they borrow from Housekeeping, and what they most often ask the AI.
+// what they borrow from Housekeeping, what they most often ask the AI, and the
+// most-requested restaurant food & drinks.
 type Infographics struct {
 	TopComplaints []CategoryCount `json:"top_complaints"` // engineering/equipment issues
 	TopBorrowed   []CategoryCount `json:"top_borrowed"`   // housekeeping amenities requested
 	TopAsked      []CategoryCount `json:"top_asked"`      // most-asked info intents (conversations)
+	TopOrdered    []CategoryCount `json:"top_ordered"`    // most-requested F&B from chat
 }
 
 // Complaint intents = equipment/maintenance issues (ENGINEERING routing).
@@ -230,6 +232,7 @@ func (r *TicketRepository) GetInfographics() (*Infographics, error) {
 		TopComplaints: []CategoryCount{},
 		TopBorrowed:   []CategoryCount{},
 		TopAsked:      []CategoryCount{},
+		TopOrdered:    []CategoryCount{},
 	}
 
 	complaints, err := topCategoryInSet(ctx, col, complaintIntents, 6)

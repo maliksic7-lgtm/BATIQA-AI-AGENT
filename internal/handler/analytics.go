@@ -58,6 +58,12 @@ func (h *InfographicsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 				ig.TopAsked = append(ig.TopAsked, repository.CategoryCount{Category: in.Intent, Count: in.Count})
 			}
 		}
+		ordered, oerr := h.convRepo.TopOrderedItems(5)
+		if oerr == nil {
+			for _, in := range ordered {
+				ig.TopOrdered = append(ig.TopOrdered, repository.CategoryCount{Category: in.Intent, Count: in.Count})
+			}
+		}
 	}
 	WriteJSON(w, http.StatusOK, ig)
 }

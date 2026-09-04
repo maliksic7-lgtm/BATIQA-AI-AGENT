@@ -999,9 +999,9 @@ body {
 
 /* Infographics (guest insights) */
 #infographics { margin-top: 6px; }
-.infographics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.infographics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-@media (max-width: 1200px) {
+@media (max-width: 900px) {
   .infographics-grid { grid-template-columns: 1fr; }
 }
 
