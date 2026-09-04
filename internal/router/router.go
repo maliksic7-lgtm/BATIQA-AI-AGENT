@@ -80,6 +80,8 @@ func NewWithDB(db *mongo.Database) http.Handler {
 		hotelHandler := handler.NewHotelHandler(hotelRepo)
 		recHandler := handler.NewRecommendationHandler(recRepo)
 		staffAuthHandler := handler.NewStaffAuthHandler(repository.NewStaffRepository(db), sessionRepo)
+		// Production login throttling: persistent across restarts & instances.
+		handler.SetRateLimiter(handler.NewMongoRateLimiter(repository.NewLoginRateLimitRepository(db)))
 		statsHandler := handler.NewStatsHandler(ticketRepo)
 		staffRepo := repository.NewStaffRepository(db)
 		assignHandler := handler.NewAssignHandler(ticketSvc, staffRepo, repository.NewAssignmentRepository(db))

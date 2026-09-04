@@ -165,6 +165,15 @@ func ensureIndexes(ctx context.Context, db *mongo.Database) error {
 			mongo.IndexModel{Keys: bson.M{"status": 1}},
 			mongo.IndexModel{Keys: bson.M{"created_at": -1}},
 		},
+		loginAttemptsCol: {
+			// Login lockout window. Also TTL: Mongo auto-deletes attempts older
+			// than the window so the collection stays bounded (deletion ~60s).
+			mongo.IndexModel{Keys: bson.M{"key": 1}},
+			mongo.IndexModel{
+				Keys:    bson.M{"ts": 1},
+				Options: options.Index().SetExpireAfterSeconds(20 * 60),
+			},
+		},
 	}
 	for col, models := range indexes {
 		if _, err := db.Collection(col).Indexes().CreateMany(ctx, models); err != nil {

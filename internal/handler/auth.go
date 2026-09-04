@@ -40,17 +40,118 @@ func NewStaffAuthHandler(repo *repository.StaffRepository, sessions *repository.
 	return &StaffAuthHandler{staffRepo: repo, sessions: sessions}
 }
 
-// ---- Login rate limiting (in-memory sliding window; per-instance is enough for MVP) ----
+// ---- Login rate limiting (pluggable) ----
+// Default is in-memory (per-instance, unit-testable without a DB). For
+// deployments with multiple instances / restarts that must share state, callers
+// may install a persistent MongoDB-backed limiter via SetRateLimiter. The plain
+// package functions below are kept as the in-memory default used by tests.
 
 const (
 	rateWindow   = 15 * time.Minute
 	rateMaxFails = 5
 )
 
+// rateLimiter abstracts login attempt throttling so the handler can be backed
+// by either the in-memory map (default, tests) or a DB store (production).
+type rateLimiter interface {
+	// limited returns true and a retry duration if the key is over the limit.
+	limited(key string) (bool, time.Duration)
+	recordFail(key string)
+	clear(key string)
+}
+
+var activeLimiter rateLimiter = newMemoryLimiter()
+
+type memoryLimiter struct{}
+
+func newMemoryLimiter() *memoryLimiter { return &memoryLimiter{} }
+
 var (
 	rateMu     sync.Mutex
 	loginFails = map[string][]time.Time{}
 )
+
+func (memoryLimiter) limited(key string) (bool, time.Duration) {
+	startRateLimiterGC()
+	rateMu.Lock()
+	defer rateMu.Unlock()
+	now := time.Now()
+	// Filter the stored fails, keeping only those within the window.
+	// NOTE: iterate over loginFails[key] (not the [:0] re-slice, which is empty
+	// and would silently wipe every entry on each check).
+	fails := loginFails[key][:0]
+	for _, t := range loginFails[key] {
+		if now.Sub(t) < rateWindow {
+			fails = append(fails, t)
+		}
+	}
+	if len(fails) >= rateMaxFails {
+		retry := rateWindow - now.Sub(fails[0])
+		return true, retry
+	}
+	loginFails[key] = fails
+	return false, 0
+}
+
+func (memoryLimiter) recordFail(key string) {
+	startRateLimiterGC()
+	rateMu.Lock()
+	loginFails[key] = append(loginFails[key], time.Now())
+	rateMu.Unlock()
+}
+
+func (memoryLimiter) clear(key string) {
+	rateMu.Lock()
+	delete(loginFails, key)
+	rateMu.Unlock()
+}
+
+// SetRateLimiter installs an alternate (e.g. persistent MongoDB) limiter. A
+// nil value restores the in-memory default. Not synchronized: call once at
+// startup before serving traffic.
+func SetRateLimiter(l rateLimiter) {
+	if l == nil {
+		activeLimiter = newMemoryLimiter()
+	} else {
+		activeLimiter = l
+	}
+}
+
+// mongoRateLimiter backs the persistent path using LoginRateLimitRepository.
+// It is only wired when a DB is present (see router.NewWithDB).
+type mongoRateLimiter struct {
+	repo *repository.LoginRateLimitRepository
+}
+
+func NewMongoRateLimiter(repo *repository.LoginRateLimitRepository) *mongoRateLimiter {
+	return &mongoRateLimiter{repo: repo}
+}
+
+func (m *mongoRateLimiter) limited(key string) (bool, time.Duration) {
+	if m.repo == nil {
+		return false, 0
+	}
+	since := time.Now().Add(-rateWindow)
+	n, _ := m.repo.CountRecent(key, since)
+	if n >= rateMaxFails {
+		// Best-effort retry estimate: TTL window remainder (no per-attempt ts
+		// stored on the newest slice, so approximate with the full window).
+		return true, rateWindow
+	}
+	return false, 0
+}
+
+func (m *mongoRateLimiter) recordFail(key string) {
+	if m.repo != nil {
+		_ = m.repo.Record(key, time.Now())
+	}
+}
+
+func (m *mongoRateLimiter) clear(key string) {
+	if m.repo != nil {
+		m.repo.Clear(key)
+	}
+}
 
 // startRateLimiterGC periodically purges stale rate-limit entries so the
 // in-memory map cannot grow unbounded between requests. Idempotent via sync.Once.
@@ -84,38 +185,15 @@ func startRateLimiterGC() {
 var rateGCOnce sync.Once
 
 func rateLimited(key string) (bool, time.Duration) {
-	startRateLimiterGC()
-	rateMu.Lock()
-	defer rateMu.Unlock()
-	now := time.Now()
-	// Filter the stored fails in place, keeping only those within the window.
-	// NOTE: iterate over loginFails[key] (not the [:0] re-slice, which is empty
-	// and would silently wipe every entry on each check).
-	fails := loginFails[key][:0]
-	for _, t := range loginFails[key] {
-		if now.Sub(t) < rateWindow {
-			fails = append(fails, t)
-		}
-	}
-	if len(fails) >= rateMaxFails {
-		retry := rateWindow - now.Sub(fails[0])
-		return true, retry
-	}
-	loginFails[key] = fails
-	return false, 0
+	return activeLimiter.limited(key)
 }
 
 func recordFail(key string) {
-	startRateLimiterGC()
-	rateMu.Lock()
-	loginFails[key] = append(loginFails[key], time.Now())
-	rateMu.Unlock()
+	activeLimiter.recordFail(key)
 }
 
 func clearFails(key string) {
-	rateMu.Lock()
-	delete(loginFails, key)
-	rateMu.Unlock()
+	activeLimiter.clear(key)
 }
 
 // ---- DTOs ----
