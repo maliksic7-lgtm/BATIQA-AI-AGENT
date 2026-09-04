@@ -86,6 +86,7 @@ func NewWithDB(db *mongo.Database) http.Handler {
 		qrHandler := handler.NewQRHandler(staffAuthHandler)
 		sseHandler := handler.NewSSEHandler(staffAuthHandler, broker)
 		analyticsHandler := handler.NewAnalyticsHandler(ticketRepo)
+		infographicsHandler := handler.NewInfographicsHandler(ticketRepo, convRepo)
 
 		// Staff auth: POST /api/staff/login (public), GET /api/staff/me, POST /api/staff/logout (auth)
 		mux.HandleFunc("/api/staff/login", staffAuthHandler.Login)
@@ -103,6 +104,9 @@ func NewWithDB(db *mongo.Database) http.Handler {
 
 		// Analytics: GET /api/analytics (staff only)
 		mux.Handle("/api/analytics", staffAuthHandler.AuthMiddleware(http.HandlerFunc(analyticsHandler.ServeHTTP)))
+
+		// Infographics: GET /api/analytics/infographics (staff only)
+		mux.Handle("/api/analytics/infographics", staffAuthHandler.AuthMiddleware(http.HandlerFunc(infographicsHandler.ServeHTTP)))
 
 		// Guest identity from QR token: GET /api/guest/me
 		mux.Handle("/api/guest/me", handler.GuestAuthMiddleware(http.HandlerFunc(chatHandler.GuestMe)))

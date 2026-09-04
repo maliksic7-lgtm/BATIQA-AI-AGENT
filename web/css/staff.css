@@ -997,6 +997,14 @@ body {
 }
 .cat-main { flex: 1; min-width: 0; }
 
+/* Infographics (guest insights) */
+#infographics { margin-top: 6px; }
+.infographics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+@media (max-width: 1200px) {
+  .infographics-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 900px) {
   .analytics-grid { grid-template-columns: 1fr; }
 }

@@ -41,10 +41,10 @@ func currentWeather(ctx context.Context) string {
 
 	var out struct {
 		Current struct {
-			Temperature2M   float64 `json:"temperature_2m"`
+			Temperature2M    float64 `json:"temperature_2m"`
 			RelativeHumidity float64 `json:"relative_humidity_2m"`
 			WeatherCode      int     `json:"weather_code"`
-			WindSpeed10M    float64 `json:"wind_speed_10m"`
+			WindSpeed10M     float64 `json:"wind_speed_10m"`
 		} `json:"current"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -51,13 +50,34 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ping := time.NewTicker(25 * time.Second)
 	defer ping.Stop()
 
+	// writeTimeout bounds how long any single flush may block. If the client
+	// silently stops reading, this fails fast instead of leaking a goroutine +
+	// broker subscription forever.
+	writeTimeout := 30 * time.Second
+
+	write := func(s string) bool {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			fmt.Fprint(w, s)
+			flusher.Flush()
+		}()
+		select {
+		case <-done:
+			return true
+		case <-time.After(writeTimeout):
+			return false
+		}
+	}
+
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 		case <-ping.C:
-			fmt.Fprint(w, ": ping\n\n")
-			flusher.Flush()
+			if !write(": ping\n\n") {
+				return
+			}
 		case ev, open := <-ch:
 			if !open {
 				return
@@ -66,10 +86,9 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				continue
 			}
-			fmt.Fprintf(w, "event: %s\ndata: {\"type\":%q,\"ticket\":%s}\n\n", ev.Type, ev.Type, data)
-			flusher.Flush()
+			if !write(fmt.Sprintf("event: %s\ndata: {\"type\":%q,\"ticket\":%s}\n\n", ev.Type, ev.Type, data)) {
+				return
+			}
 		}
 	}
 }
-
-var _ = context.Background

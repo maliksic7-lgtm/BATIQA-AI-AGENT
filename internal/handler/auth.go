@@ -52,12 +52,47 @@ var (
 	loginFails = map[string][]time.Time{}
 )
 
+// startRateLimiterGC periodically purges stale rate-limit entries so the
+// in-memory map cannot grow unbounded between requests. Idempotent via sync.Once.
+func startRateLimiterGC() {
+	rateGCOnce.Do(func() {
+		go func() {
+			ticker := time.NewTicker(rateWindow)
+			defer ticker.Stop()
+			for range ticker.C {
+				rateMu.Lock()
+				cutoff := time.Now().Add(-rateWindow)
+				for key, fails := range loginFails {
+					kept := fails[:0]
+					for _, t := range fails {
+						if t.After(cutoff) {
+							kept = append(kept, t)
+						}
+					}
+					if len(kept) == 0 {
+						delete(loginFails, key)
+					} else {
+						loginFails[key] = kept
+					}
+				}
+				rateMu.Unlock()
+			}
+		}()
+	})
+}
+
+var rateGCOnce sync.Once
+
 func rateLimited(key string) (bool, time.Duration) {
+	startRateLimiterGC()
 	rateMu.Lock()
 	defer rateMu.Unlock()
 	now := time.Now()
+	// Filter the stored fails in place, keeping only those within the window.
+	// NOTE: iterate over loginFails[key] (not the [:0] re-slice, which is empty
+	// and would silently wipe every entry on each check).
 	fails := loginFails[key][:0]
-	for _, t := range fails {
+	for _, t := range loginFails[key] {
 		if now.Sub(t) < rateWindow {
 			fails = append(fails, t)
 		}
@@ -71,6 +106,7 @@ func rateLimited(key string) (bool, time.Duration) {
 }
 
 func recordFail(key string) {
+	startRateLimiterGC()
 	rateMu.Lock()
 	loginFails[key] = append(loginFails[key], time.Now())
 	rateMu.Unlock()

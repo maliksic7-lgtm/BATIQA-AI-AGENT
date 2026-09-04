@@ -21,6 +21,29 @@ type Analytics struct {
 	TotalTickets     int64            `json:"total_tickets"`
 }
 
+// Infographics holds the "most common guest insights" requested by the product
+// brief (see docs/GOALS & the infographics note): what guests complain about,
+// what they borrow from Housekeeping, and what they most often ask the AI.
+type Infographics struct {
+	TopComplaints []CategoryCount `json:"top_complaints"` // engineering/equipment issues
+	TopBorrowed   []CategoryCount `json:"top_borrowed"`   // housekeeping amenities requested
+	TopAsked      []CategoryCount `json:"top_asked"`      // most-asked info intents (conversations)
+}
+
+// Complaint intents = equipment/maintenance issues (ENGINEERING routing).
+var complaintIntents = map[string]bool{
+	"AC_PROBLEM": true, "TV_PROBLEM": true, "WIFI_PROBLEM": true, "LIGHT_PROBLEM": true,
+	"SHOWER_PROBLEM": true, "PLUMBING_PROBLEM": true, "ROOM_EQUIPMENT_PROBLEM": true,
+	"GENERAL_MAINTENANCE": true,
+}
+
+// BorrowedIntents = housekeeping amenity/cleaning requests the guest asked to be
+// supplied or replenished (not equipment complaints).
+var borrowedIntents = map[string]bool{
+	"TOWEL_REQUEST": true, "AMENITY_REQUEST": true, "ROOM_CLEANING_REQUEST": true,
+	"HOUSEKEEPING_REQUEST": true,
+}
+
 type DailyCount struct {
 	Date     string `json:"date"`
 	Created  int64  `json:"created"`
@@ -179,6 +202,63 @@ func (r *TicketRepository) topCategories(ctx context.Context, col *mongo.Collect
 	})
 	if err != nil {
 		return nil, fmt.Errorf("analytics top categories: %w", err)
+	}
+	defer cur.Close(ctx)
+	out := []CategoryCount{}
+	for cur.Next(ctx) {
+		var row struct {
+			ID    string `bson:"_id"`
+			Count int64  `bson:"count"`
+		}
+		if err := cur.Decode(&row); err == nil && row.ID != "" {
+			out = append(out, CategoryCount{Category: row.ID, Count: row.Count})
+		}
+	}
+	return out, nil
+}
+
+// GetInfographics computes the three "most common" insight slices for the
+// operations dashboard: top complaints, top borrowed items, and top (assistant)
+// intents. Returns zero-value slices (never error) so the dashboard degrades
+// gracefully when there's no data yet.
+func (r *TicketRepository) GetInfographics() (*Infographics, error) {
+	ctx, cancel := ticketCtx()
+	defer cancel()
+	col := r.db.Collection(ticketsCol)
+
+	ig := &Infographics{
+		TopComplaints: []CategoryCount{},
+		TopBorrowed:   []CategoryCount{},
+		TopAsked:      []CategoryCount{},
+	}
+
+	complaints, err := topCategoryInSet(ctx, col, complaintIntents, 6)
+	if err != nil {
+		return nil, err
+	}
+	borrowed, err := topCategoryInSet(ctx, col, borrowedIntents, 6)
+	if err != nil {
+		return nil, err
+	}
+	ig.TopComplaints = complaints
+	ig.TopBorrowed = borrowed
+	return ig, nil
+}
+
+// topCategoryInSet counts tickets whose category is in `set`, sorted desc, limited.
+func topCategoryInSet(ctx context.Context, col *mongo.Collection, set map[string]bool, limit int64) ([]CategoryCount, error) {
+	intents := make([]string, 0, len(set))
+	for k := range set {
+		intents = append(intents, k)
+	}
+	cur, err := col.Aggregate(ctx, []bson.M{
+		{"$match": bson.M{"category": bson.M{"$in": intents}}},
+		{"$group": bson.M{"_id": "$category", "count": bson.M{"$sum": 1}}},
+		{"$sort": bson.M{"count": -1}},
+		{"$limit": limit},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("analytics top in set: %w", err)
 	}
 	defer cur.Close(ctx)
 	out := []CategoryCount{}

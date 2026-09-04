@@ -88,7 +88,7 @@ func (g *GeminiProvider) Generate(ctx context.Context, req Request) (*RawAIOutpu
 	}
 	b, _ := json.Marshal(body)
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", g.model, g.apiKey)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent", g.model)
 
 	// Retry transient server-side errors (429 rate limit, 5xx) with short backoff.
 	var respBytes []byte
@@ -106,6 +106,7 @@ func (g *GeminiProvider) Generate(ctx context.Context, req Request) (*RawAIOutpu
 			return nil, &ProviderError{Provider: g.Name(), Err: err}
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("x-goog-api-key", g.apiKey)
 
 		resp, err := g.client.Do(httpReq)
 		if err != nil {
@@ -250,12 +251,13 @@ func (g *GeminiProvider) GenerateWithImage(ctx context.Context, req Request, ima
 	}
 	b, _ := json.Marshal(body)
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", g.model, g.apiKey)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent", g.model)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(b))
 	if err != nil {
 		return nil, &ProviderError{Provider: g.Name(), Err: err}
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-goog-api-key", g.apiKey)
 
 	resp, err := g.client.Do(httpReq)
 	if err != nil {

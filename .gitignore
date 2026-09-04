@@ -11,6 +11,7 @@ dist/
 build/
 bin/
 *.egg-info/
+*.exe
 
 # Environment
 .env

@@ -321,10 +321,12 @@
         loadStats();
         loadTickets(true);
         loadAnalytics(true);
+        loadInfographics(true);
       }else if(msg.type === 'ticket.updated'){
         loadStats();
         loadTickets(true);
         loadAnalytics(true);
+        loadInfographics(true);
       }
     };
   }
@@ -368,6 +370,46 @@
     }catch(e){
       if(!quiet) console.error(e);
     }
+  }
+
+  // ---------- Infographics ----------
+  async function loadInfographics(quiet){
+    try{
+      const res = await fetch('/api/analytics/infographics', {headers: authHeaders()});
+      if(!res.ok) throw new Error('Failed infographics');
+      buildInfographics(await res.json());
+    }catch(e){
+      if(!quiet) console.error(e);
+    }
+  }
+
+  function buildInfographics(data){
+    const d = data || {};
+    renderCategoryList('topComplaints', d.top_complaints, 'hbar-fill--high');
+    renderCategoryList('topBorrowed', d.top_borrowed, 'hbar-fill--low');
+    renderCategoryList('topAsked', d.top_asked, 'hbar-fill--gold');
+  }
+
+  function renderCategoryList(id, list, fillClass){
+    const el = document.getElementById(id);
+    if(!el) return;
+    const arr = (list || []).slice(0, 5);
+    if(!arr.length){
+      el.innerHTML = '<p class="an-empty">Belum ada data</p>';
+      return;
+    }
+    const max = Math.max(1, ...arr.map(c => Number(c.count) || 0));
+    el.innerHTML = arr.map((c, i) => {
+      const count = Number(c.count) || 0;
+      const pct = Math.round((count / max) * 100);
+      return '<div class="cat-row">'
+        + '<span class="cat-rank">' + (i + 1) + '</span>'
+        + '<div class="cat-main">'
+        + '<div class="hbar-top"><span>' + esc(labelize(c.category)) + '</span><strong>' + count + '</strong></div>'
+        + '<div class="hbar-track"><div class="hbar-fill ' + (fillClass || '') + '" style="width:' + pct + '%"></div></div>'
+        + '</div>'
+        + '</div>';
+    }).join('');
   }
 
   function labelize(s){
@@ -496,7 +538,7 @@
   }
 
   // Events
-  document.getElementById('refreshBtn').addEventListener('click', ()=>{ loadTickets(); loadStats(); });
+  document.getElementById('refreshBtn').addEventListener('click', ()=>{ loadTickets(); loadStats(); loadAnalytics(); loadInfographics(); });
   document.getElementById('clearFilter').addEventListener('click', ()=>{
     deptFilter.value=''; statusFilter.value=''; priorityFilter.value='';
     loadTickets();
@@ -531,6 +573,7 @@
     loadStats();
     loadTickets();
     loadAnalytics();
+    loadInfographics();
     initEvents();
   });
   // Polling fallback (SSE adalah mekanisme utama realtime)
