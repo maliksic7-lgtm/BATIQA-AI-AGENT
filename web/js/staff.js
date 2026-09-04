@@ -413,6 +413,89 @@
     }).join('');
   }
 
+  // ---------- Room service orders ----------
+  const ordersBody = document.getElementById('ordersBody');
+  const ordersWrap = document.getElementById('ordersWrap');
+  const ordersEmpty = document.getElementById('ordersEmpty');
+
+  const ORDER_STATUS = {
+    NEW: 'Diterima', PREPARING: 'Disiapkan', COMPLETED: 'Selesai', CANCELLED: 'Dibatalkan'
+  };
+  function orderStatusClass(s){
+    return s === 'COMPLETED' ? 'st-badge st-badge--done'
+      : s === 'CANCELLED' ? 'st-badge st-badge--muted'
+      : s === 'PREPARING' ? 'st-badge st-badge--warn'
+      : 'st-badge st-badge--open';
+  }
+  function rupiah(n){
+    return 'Rp ' + (Number(n) || 0).toLocaleString('id-ID');
+  }
+
+  async function loadOrders(quiet){
+    try{
+      const res = await fetch('/api/orders', { headers: authHeaders() });
+      if(!res.ok) throw new Error('Failed orders');
+      const data = await res.json();
+      renderOrders(data.orders || []);
+    }catch(e){
+      if(!quiet) console.error(e);
+    }
+  }
+
+  function renderOrders(orders){
+    // Dedupe & sort newest first (server already sorts, guard anyway)
+    const seen = {};
+    const list = (orders || []).filter(o => { if(seen[o.id]) return false; seen[o.id] = 1; return true; });
+    const wrap = ordersWrap, empty = ordersEmpty;
+    if(!wrap || !empty) return;
+    empty.style.display = list.length ? 'none' : 'block';
+    wrap.style.display = list.length ? 'block' : 'none';
+    if(!ordersBody) return;
+    ordersBody.innerHTML = '';
+    list.forEach(o => {
+      const items = (o.items || []).map(i => esc(i.name) + ' ×' + i.quantity).join(', ');
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + esc(o.order_number) + '</td>'
+        + '<td>Room ' + esc(o.room_number || '—') + '</td>'
+        + '<td>' + (items || '—') + '</td>'
+        + '<td>' + rupiah(o.total_price) + '</td>'
+        + '<td><span class="' + orderStatusClass(o.status) + '">' + (ORDER_STATUS[o.status] || esc(o.status)) + '</span></td>'
+        + '<td>' + esc((o.created_at || '').slice(0, 10)) + '</td>'
+        + '<td>'
+        + (o.status === 'NEW' ? '<button class="o-act" data-order="' + o.id + '" data-status="PREPARING">Preparing</button>' : '')
+        + (o.status === 'PREPARING' ? '<button class="o-act" data-order="' + o.id + '" data-status="COMPLETED">Complete</button>' : '')
+        + (o.status === 'NEW' || o.status === 'PREPARING' ? '<button class="o-act o-act--muted" data-order="' + o.id + '" data-status="CANCELLED">Cancel</button>' : '')
+        + '</td>';
+      ordersBody.appendChild(tr);
+    });
+  }
+
+  async function setOrderStatus(orderId, status){
+    try{
+      const res = await fetch('/api/orders/' + orderId + '/status', {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ status: status }),
+      });
+      if(!res.ok){
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error?.message || 'Failed to update order');
+      }
+      addToast('Order #' + orderId + ' → ' + (ORDER_STATUS[status] || status));
+      loadOrders(true);
+    }catch(e){
+      showError(e.message);
+    }
+  }
+
+  if(ordersBody){
+    ordersBody.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-order]');
+      if(btn) setOrderStatus(btn.getAttribute('data-order'), btn.getAttribute('data-status'));
+    });
+  }
+
   function labelize(s){
     return String(s || '').split('_')
       .map(w => w ? w.charAt(0) + w.slice(1).toLowerCase() : w)
@@ -539,7 +622,7 @@
   }
 
   // Events
-  document.getElementById('refreshBtn').addEventListener('click', ()=>{ loadTickets(); loadStats(); loadAnalytics(); loadInfographics(); });
+  document.getElementById('refreshBtn').addEventListener('click', ()=>{ loadTickets(); loadStats(); loadAnalytics(); loadInfographics(); loadOrders(); });
   document.getElementById('clearFilter').addEventListener('click', ()=>{
     deptFilter.value=''; statusFilter.value=''; priorityFilter.value='';
     loadTickets();
@@ -575,6 +658,7 @@
     loadTickets();
     loadAnalytics();
     loadInfographics();
+    loadOrders();
     initEvents();
   });
   // Polling fallback (SSE adalah mekanisme utama realtime)

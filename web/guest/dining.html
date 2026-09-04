@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#033C5A">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <title>Room Dining — BATIQA Pekanbaru</title>
+  <link rel="stylesheet" href="/css/guest.css">
+  <link rel="stylesheet" href="/css/dining.css">
+</head>
+<body>
+
+  <section class="page-hero on-dark">
+    <div class="container container--narrow" style="display:flex; flex-wrap:wrap; align-items:flex-end; gap:18px;">
+      <div style="flex:1 1 320px;">
+        <a href="/" class="page-hero__back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Kembali ke Beranda
+        </a>
+        <span class="kicker kicker--light">Room Service 24 Jam</span>
+        <h1>Dining &amp; Beverage</h1>
+        <p class="page-hero__sub">Pesan makanan atau minuman FRESQA Bistro langsung dari kamar. Dikirim room service 24 jam.</p>
+      </div>
+      <span class="header__room" id="roomBadge" style="display:none; margin-bottom:6px;"></span>
+    </div>
+  </section>
+
+  <main class="subpage-body">
+    <div class="container container--narrow">
+
+      <!-- ===== Categories filter chips ===== -->
+      <div class="chip-row" id="catRow">
+        <button class="chip active" data-cat="">Semua</button>
+        <button class="chip" data-cat="FOOD">Makanan</button>
+        <button class="chip" data-cat="DRINK">Minuman</button>
+      </div>
+
+      <div id="loading" class="loading"><div class="spinner"></div> Memuat menu…</div>
+      <div id="error" class="error" style="display:none;">
+        <span id="errorText"></span>
+        <button class="error__retry" onclick="initDining()">Retry</button>
+      </div>
+
+      <!-- ===== Menu grid + cart ===== -->
+      <div class="dining-layout">
+        <section id="menu" class="grid cards"></section>
+
+        <aside class="cart" id="cart">
+          <h3 class="cart__title">Pesanan Anda</h3>
+          <div id="cartItems"></div>
+          <div class="cart__empty" id="cartEmpty">Belum ada item dipilih.</div>
+          <div class="cart__summary">
+            <div class="cart__row"><span>Total</span><span id="cartTotal">Rp 0</span></div>
+            <button class="btn btn--gold cart__submit" id="placeOrderBtn" disabled>Kirim Pesanan</button>
+            <p class="cart__note" id="orderStatus"></p>
+          </div>
+        </aside>
+      </div>
+
+      <div id="orders" class="orders"></div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/dining.js"></script>
+</body>
+</html>

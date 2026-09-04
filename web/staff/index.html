@@ -123,6 +123,33 @@
           </div>
         </section>
 
+        <!-- Room Service Orders -->
+        <section id="orders" aria-label="Room service orders">
+          <div class="an-head">
+            <h3>Room Service Orders</h3>
+            <span>Pesanan makanan & minuman terbaru</span>
+          </div>
+          <div id="ordersWrap" class="table-wrap" style="display:none;">
+            <table class="table" aria-label="Room service orders">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Room</th>
+                  <th>Items</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="ordersBody"></tbody>
+            </table>
+          </div>
+          <div id="ordersEmpty" class="empty" style="display:none;">
+            <p style="font-size:13px; color:var(--muted); margin:0;">Belum ada pesanan room service.</p>
+          </div>
+        </section>
+
         <!-- Filters -->
         <div class="filters" id="filters" aria-label="Filters">
           <span style="font-size:12px; color:var(--muted); margin-right:4px;">Filter:</span>

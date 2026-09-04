@@ -1,0 +1,130 @@
+/* ---------- Room dining: menu + cart ---------- */
+.dining-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 28px;
+}
+@media (min-width: 760px) {
+  .dining-layout { grid-template-columns: 1fr 320px; align-items: start; }
+}
+.dining-menu-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
+
+.dish {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dish__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--navy);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.dish__tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold-text);
+  background: var(--gold-tint);
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.dish__desc { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.dish__price { font-size: 15px; font-weight: 700; color: var(--navy-deep); }
+.dish-controls { display: flex; align-items: center; gap: 10px; }
+.dish__qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-variant-numeric: tabular-nums;
+}
+.dish__qty button {
+  border: none;
+  background: transparent;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-weight: 700;
+  color: var(--navy);
+  cursor: pointer;
+}
+.dish__qty button:hover { background: var(--gold-tint); }
+.dish__qty span { min-width: 22px; text-align: center; }
+.dish__add {
+  border: 1px solid var(--gold-line);
+  background: var(--gold);
+  color: #fff;
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dish__add:hover { box-shadow: var(--shadow-sm); }
+.dish__add:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.cart {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 20px;
+  position: sticky;
+  top: 16px;
+}
+.cart__title { font-size: 17px; font-weight: 700; color: var(--navy); margin-bottom: 12px; }
+.cart__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+}
+.cart__item .cart__amt { font-weight: 700; color: var(--navy-deep); font-variant-numeric: tabular-nums; }
+.cart__item button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.cart__empty { color: var(--muted); font-size: 13.5px; font-style: italic; padding: 8px 0; }
+.cart__summary { border-top: 1px solid var(--border); padding: 12px 0 4px; }
+.cart__row { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 10px; }
+.cart__submit { width: 100%; padding: 12px 0; }
+.cart__note { font-size: 12.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+.orders { margin-top: 28px; }
+.orders__head { font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+.order-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.order-card__head { display: flex; justify-content: space-between; align-items: center; }
+.order-card__no { font-weight: 700; color: var(--navy); }
+.order-card__status { font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.order-card__status.NEW { color: var(--gold-text); background: var(--gold-tint); border: 1px solid var(--gold-line); border-radius: 999px; padding: 2px 9px; }
+.order-card__status.PREPARING { color: #8a6d42; background: #f3ead9; border: 1px solid #d8c09a; border-radius: 999px; padding: 2px 9px; }
+.order-card__status.COMPLETED { color: #1c6b3a; background: #e6f2e6; border: 1px solid #9ecf9e; border-radius: 999px; padding: 2px 9px; }
+.order-card__status.CANCELLED { color: #a33; background: #fbe9e9; border: 1px solid #e0b4b4; border-radius: 999px; padding: 2px 9px; }
+.order-card__items { font-size: 13.5px; color: var(--muted); margin-top: 8px; }
+.order-card__total { font-size: 14px; font-weight: 700; color: var(--navy-deep); margin-top: 6px; }

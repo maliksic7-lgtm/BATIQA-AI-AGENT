@@ -82,6 +82,27 @@ const API = {
     const q = new URLSearchParams(params).toString();
     return this.request('/api/recommendations' + (q ? '?' + q : ''));
   },
+  // Room-service dining: menu catalog (public), place & list orders (guest).
+  getMenu() {
+    return this.request('/api/menu');
+  },
+  placeOrder(session_id, room_number, items, note) {
+    const body = { session_id, room_number, items, note };
+    const t = getToken();
+    if (t) body.token = t;
+    return this.request('/api/orders', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+  getOrders(session_id) {
+    const t = getToken();
+    const q = new URLSearchParams();
+    if (session_id) q.set('session_id', session_id);
+    if (t) q.set('t', t);
+    const s = q.toString();
+    return this.request('/api/orders' + (s ? '?' + s : ''));
+  },
   health() {
     return this.request('/api/health');
   }
