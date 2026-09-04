@@ -12,6 +12,7 @@ type Recommendation struct {
 	PriceMax    *int      `json:"price_max,omitempty" bson:"price_max,omitempty"`
 	DistanceKm  *float64  `json:"distance_km,omitempty" bson:"distance_km,omitempty"`
 	Address     *string   `json:"address,omitempty" bson:"address,omitempty"`
+	MapsLink    *string   `json:"maps_link,omitempty" bson:"maps_link,omitempty"`
 	Active      bool      `json:"active" bson:"active"`
 	CreatedAt   time.Time `json:"created_at" bson:"created_at"`
 }

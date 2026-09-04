@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#033C5A">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <title>BATIQA Assistant — Chat AI</title>
   <link rel="stylesheet" href="/css/guest.css">
 </head>
@@ -49,7 +52,21 @@
           <button class="chip" data-msg="Recommend dinner under Rp100.000.">Recommend dinner under Rp100.000.</button>
         </div>
 
+        <div class="photo-preview" id="photoPreview" style="display:none;" aria-live="polite">
+          <div class="photo-preview__thumb">
+            <img id="photoPreviewImg" alt="Pratinjau foto kerusakan">
+            <button type="button" class="photo-preview__remove" id="photoRemove" aria-label="Hapus foto terpilih">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <span class="photo-preview__caption">Foto siap dikirim<strong id="photoPreviewName"></strong></span>
+        </div>
+
         <form class="chat__input" id="chatForm" aria-label="Kirim pesan">
+          <input type="file" id="photoInput" accept="image/*" capture="environment" hidden aria-hidden="true" tabindex="-1">
+          <button type="button" class="chat__attach" id="photoBtn" aria-label="Lampirkan foto kerusakan" title="Kirim foto kerusakan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </button>
           <label for="msgInput" class="sr-only">Tulis pesan Anda</label>
           <textarea id="msgInput" class="chat__field" placeholder="Tanyakan apa saja — layanan kamar, info hotel…" rows="1" aria-label="Tulis pesan Anda" autocomplete="off" enterkeyhint="send"></textarea>
           <button type="submit" class="chat__send" id="sendBtn" aria-label="Kirim pesan">
@@ -61,6 +78,7 @@
   </div>
 
   <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
   <script src="/js/chat.js"></script>
 </body>
 </html>

@@ -50,3 +50,9 @@ docker-compose.override.yml
 *.pem
 .vercel
 .netlify
+
+# Temp & error logs
+*.err
+tmp_tok.go
+.env.bak
+BATIQA AI.txt

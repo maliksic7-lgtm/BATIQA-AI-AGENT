@@ -39,6 +39,7 @@ Arsitektur berlapis: `Handler → Service → Repository → MongoDB`. AI tidak 
 │       ├── ai/            # pipeline AI: language→intent→entity→routing→priority→action
 │       └── ticket/        # business logic tiket (validasi + sentinel errors)
 ├── web/                   # frontend guest (mobile-first) + staff dashboard
+├── docs/specs/              # dokumentasi lengkap: spesifikasi produk & arsitektur
 ├── docker-compose.yml     # MongoDB saja; API jalan lokal
 └── go.mod
 ```
@@ -122,7 +123,7 @@ gofmt -l .         # harus kosong
 
 ## Dokumentasi
 
-Spesifikasi lengkap ada di file `.MD` di root repo (GOALS, MVP SCOPE, AI ARCHITECTURE, TICKET LIFECYCLE, dst.) dan `docs/`.
+Dokumentasi lengkap di [`docs/specs/`](docs/specs/) — GOALS, MVP SCOPE, AI ARCHITECTURE, TICKET LIFECYCLE, dst. — serta materi kompetisi (`docs/PRESENTATION.html`, `docs/DEMO_VIDEO_SCRIPT.md`).
 
 ## License
 

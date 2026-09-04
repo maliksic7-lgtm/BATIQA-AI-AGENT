@@ -3,10 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#033C5A">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <title>BATIQA Operations — Dashboard</title>
   <link rel="stylesheet" href="/css/staff.css">
 </head>
 <body>
+  <script src="/js/app.js"></script>
   <div class="app">
     <aside class="sidebar" aria-label="Navigation">
       <div class="sidebar__brand">
@@ -37,6 +41,8 @@
       <div class="topbar">
         <h2>Dashboard</h2>
         <div class="topbar__actions">
+          <span class="live-status" id="liveDot" role="status" title="Menghubungkan..."><i class="live-status__dot" aria-hidden="true"></i><span class="live-status__text">Offline</span></span>
+          <button class="filter" id="qrBtn" aria-label="Tampilkan QR kamar">QR Kamar</button>
           <span class="badge" id="deptBadge">—</span>
           <button class="filter" id="refreshBtn" aria-label="Refresh tickets">↻ Refresh</button>
         </div>
@@ -51,6 +57,45 @@
           <div class="stat"><p class="stat__label">Engineering</p><p class="stat__value" id="statEng">—</p><p class="stat__sub">Active</p></div>
           <div class="stat"><p class="stat__label">Resolved Today</p><p class="stat__value" id="statResolved">—</p><p class="stat__sub">Today • 00:00-23:59</p></div>
         </div>
+
+        <!-- Analytics -->
+        <section id="analytics" aria-label="Analytics operasional">
+          <div class="an-head">
+            <h3>Analytics</h3>
+            <span>7 hari terakhir</span>
+          </div>
+          <div class="analytics-grid">
+            <div class="an-card an-card--chart">
+              <p class="an-title">Created vs Resolved</p>
+              <div id="barChart"><p class="an-empty">Memuat grafik...</p></div>
+              <div class="an-legend">
+                <span><i class="an-legend__dot an-legend__dot--navy" aria-hidden="true"></i>Created</span>
+                <span><i class="an-legend__dot an-legend__dot--gold" aria-hidden="true"></i>Resolved</span>
+              </div>
+            </div>
+            <div class="an-card an-card--avg">
+              <p class="an-title">Avg Resolution Time</p>
+              <p class="an-avg-value" id="avgResolution">—</p>
+              <p class="an-note">Rata-rata waktu penyelesaian tiket</p>
+              <div class="an-mini">
+                <div><strong id="anTotalOpen">—</strong><span>Total Open</span></div>
+                <div><strong id="anTotalTickets">—</strong><span>Total Tickets</span></div>
+              </div>
+            </div>
+            <div class="an-card">
+              <p class="an-title">Active by Department</p>
+              <div id="deptBars"></div>
+            </div>
+            <div class="an-card">
+              <p class="an-title">Active by Priority</p>
+              <div id="priorityBars"></div>
+            </div>
+            <div class="an-card an-card--full">
+              <p class="an-title">Top Categories</p>
+              <div id="topCats" class="cat-list"></div>
+            </div>
+          </div>
+        </section>
 
         <!-- Filters -->
         <div class="filters" id="filters" aria-label="Filters">
@@ -153,6 +198,24 @@
       </div>
     </div>
   </div>
+
+  <!-- QR Room Modal -->
+  <div class="modal" id="qrModal" role="dialog" aria-modal="true" aria-label="QR Kamar">
+    <div class="modal__card modal__card--qr">
+      <div class="modal__head">
+        <h3 id="qrTitle" style="margin:0; font-size:15px; color:var(--navy);">QR Kamar</h3>
+        <button id="qrClose" aria-label="Close">×</button>
+      </div>
+      <div class="qr-body">
+        <div class="qr-frame"><img id="qrImg" alt="QR code kamar"></div>
+        <p class="qr-room" id="qrRoomLabel">Kamar —</p>
+        <p class="qr-hint">Tempel QR di kamar — tamu scan langsung masuk</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div id="toasts" aria-live="polite"></div>
 
   <script src="/js/staff.js"></script>
 </body>

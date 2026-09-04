@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"batiqa-ai/internal/events"
 	"batiqa-ai/internal/model"
 	"batiqa-ai/internal/repository"
 	"batiqa-ai/internal/service/ai"
@@ -15,10 +16,20 @@ import (
 type Service struct {
 	tickets *repository.TicketRepository
 	guests  *repository.GuestRepository
+	broker  *events.Broker // optional live-update fanout (SSE)
 }
 
 func NewService(ticketRepo *repository.TicketRepository, guestRepo *repository.GuestRepository) *Service {
 	return &Service{tickets: ticketRepo, guests: guestRepo}
+}
+
+// SetBroker wires the live-events broker (SSE). Safe to leave unset in tests.
+func (s *Service) SetBroker(b *events.Broker) { s.broker = b }
+
+func (s *Service) publish(eventType string, t *model.Ticket) {
+	if s.broker != nil && t != nil {
+		s.broker.Publish(eventType, t)
+	}
 }
 
 // CreateRequest per docs/CREATE TICKET.MD
@@ -118,6 +129,7 @@ func (s *Service) Create(req CreateRequest) (*model.Ticket, error) {
 	if err := s.tickets.Create(t); err != nil {
 		return nil, fmt.Errorf("ticket create: %w", err)
 	}
+	s.publish("ticket.created", t)
 	return t, nil
 }
 
@@ -252,7 +264,12 @@ func (s *Service) UpdateStatus(ticketNumber, newStatus string) (*model.Ticket, e
 	if !model.IsValidStatusTransition(current.Status, newStatus) {
 		return nil, fmt.Errorf("%w: cannot transition from %s to %s", ErrInvalidTransition, current.Status, newStatus)
 	}
-	return s.tickets.UpdateStatus(ticketNumber, newStatus)
+	updated, err := s.tickets.UpdateStatus(ticketNumber, newStatus)
+	if err != nil {
+		return nil, err
+	}
+	s.publish("ticket.updated", updated)
+	return updated, nil
 }
 
 // UpdatePriority validates and updates priority (staff action per USER ROLES.md)

@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="BATIQA AI Guest Assistant — deck kompetisi SSIA AI Innovation. Hotel BATIQA Pekanbaru.">
+<title>BATIQA AI Guest Assistant — SSIA Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#033C5A;
+  --navy-deep:#022A40;
+  --gold:#C9AC85;
+  --gold-deep:#A9863F;
+  --gold-soft:#EFE6D6;
+  --bg:#F7F5F0;
+  --card:#FFFFFF;
+  --ink:#22313B;
+  --muted:#5C6C77;
+  --line:rgba(3,60,90,.16);
+  --shadow:0 14px 34px rgba(3,60,90,.10);
+  --serif:'Playfair Display',Georgia,'Times New Roman',serif;
+  --sans:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--sans);
+  background:var(--bg);
+  color:var(--ink);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+  print-color-adjust:exact;
+  -webkit-print-color-adjust:exact;
+}
+#progress{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--gold),var(--gold-deep));width:0;z-index:50;transition:width .35s ease}
+#stage{position:fixed;inset:0;display:grid;place-items:center;padding:34px 16px 74px}
+.slide{
+  width:min(94vw,calc((100vh - 118px)*1.7778));
+  aspect-ratio:16/9;
+  max-height:calc(100vh - 108px);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cg fill='none' stroke='%23033C5A' stroke-opacity='.05'%3E%3Cellipse cx='24' cy='24' rx='17' ry='7' transform='rotate(-45 24 24)'/%3E%3Cellipse cx='48' cy='24' rx='17' ry='7' transform='rotate(45 48 24)'/%3E%3Cellipse cx='24' cy='48' rx='17' ry='7' transform='rotate(45 24 48)'/%3E%3Cellipse cx='48' cy='48' rx='17' ry='7' transform='rotate(-45 48 48)'/%3E%3Ccircle cx='36' cy='36' r='1.6' fill='%23033C5A' fill-opacity='.05' stroke='none'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(180deg,#FBFAF6,var(--bg));
+  border:1px solid var(--line);
+  border-top:4px solid var(--gold);
+  border-radius:14px;
+  box-shadow:var(--shadow);
+  container-type:inline-size;
+  padding:3.6cqw 4.6cqw 3.2cqw;
+  display:none;
+  flex-direction:column;
+  position:relative;
+  overflow:hidden;
+}
+.slide.active{display:flex;animation:fadeIn .38s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.slide.dark{
+  color:#F4F1EA;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cg fill='none' stroke='%23C9AC85' stroke-opacity='.09'%3E%3Cellipse cx='24' cy='24' rx='17' ry='7' transform='rotate(-45 24 24)'/%3E%3Cellipse cx='48' cy='24' rx='17' ry='7' transform='rotate(45 48 24)'/%3E%3Cellipse cx='24' cy='48' rx='17' ry='7' transform='rotate(45 24 48)'/%3E%3Cellipse cx='48' cy='48' rx='17' ry='7' transform='rotate(-45 48 48)'/%3E%3Ccircle cx='36' cy='36' r='1.6' fill='%23C9AC85' fill-opacity='.10' stroke='none'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(120% 140% at 20% 0%,#0A4E71 0%,var(--navy) 46%,var(--navy-deep) 100%);
+  border-color:rgba(201,172,133,.35);
+  border-top:4px solid var(--gold);
+}
+.slide.dark .kicker{color:var(--gold)}
+.top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1.6cqw}
+.kicker{
+  font-size:12px;font-size:1.02cqw;
+  font-weight:700;letter-spacing:.34em;text-transform:uppercase;
+  color:var(--gold-deep);display:flex;align-items:center;gap:.9cqw;
+}
+.kicker::before{content:"";width:2.2cqw;height:2px;background:var(--gold);flex:none}
+.pageno{font-size:11px;font-size:.95cqw;color:var(--muted);letter-spacing:.18em;font-weight:600}
+.pageno b{color:var(--navy);font-size:1.25em}
+.slide.dark .pageno{color:rgba(244,241,234,.65)}
+.kicker.corner{position:absolute;top:3cqw;left:4.6cqw;margin:0}
+.slide.dark .pageno b{color:var(--gold)}
+h2{
+  font-family:var(--serif);font-weight:600;color:var(--navy);
+  font-size:34px;font-size:3.15cqw;line-height:1.16;
+  margin-bottom:2.1cqw;max-width:82%;
+}
+.slide.dark h2{color:#F7F5F0}
+h2 em{font-style:italic;color:var(--gold-deep)}
+.slide.dark h2 em{color:var(--gold)}
+.body{flex:1;display:flex;min-height:0}
+.grid{display:grid;gap:1.6cqw;width:100%;place-content:center}
+.cols-3{grid-template-columns:repeat(3,1fr)}
+.cols-2{grid-template-columns:repeat(2,1fr)}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:1.7cqw 1.8cqw;box-shadow:0 6px 18px rgba(3,60,90,.06);
+  display:flex;flex-direction:column;gap:.7cqw;
+}
+.card.accent{border-top:3px solid var(--gold)}
+.stat{
+  font-family:var(--serif);font-weight:700;color:var(--navy);
+  font-size:44px;font-size:3.9cqw;line-height:1.05;letter-spacing:-.01em;
+}
+.stat span{color:var(--gold-deep)}
+.card h3{font-size:15px;font-size:1.28cqw;font-weight:700;color:var(--navy);letter-spacing:.01em}
+.card p{font-size:12.5px;font-size:1.08cqw;line-height:1.55;color:var(--muted)}
+.note{font-size:11px;font-size:.95cqw;color:var(--muted);margin-top:1.4cqw;letter-spacing:.02em}
+.big-statement{
+  font-family:var(--serif);font-weight:500;color:var(--navy);
+  font-size:30px;font-size:2.85cqw;line-height:1.32;max-width:88%;
+}
+.big-statement em{color:var(--gold-deep)}
+.slide.dark .big-statement em{color:var(--gold)}
+.flow{display:flex;align-items:stretch;justify-content:space-between;gap:1cqw;margin-top:2.6cqw;width:94%}
+.node{
+  flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:1.5cqw 1.2cqw;text-align:center;position:relative;
+  display:flex;flex-direction:column;align-items:center;gap:.55cqw;box-shadow:0 6px 18px rgba(3,60,90,.06);
+}
+.node .idx{
+  width:2.6cqw;height:2.6cqw;border-radius:50%;background:var(--navy);color:var(--gold);
+  display:grid;place-items:center;font-weight:700;font-size:12px;font-size:1.05cqw;
+}
+.node b{font-size:14px;font-size:1.2cqw;color:var(--navy);letter-spacing:.04em;text-transform:uppercase}
+.node span{font-size:11.5px;font-size:.98cqw;color:var(--muted);line-height:1.4}
+.arrow{align-self:center;flex:none;color:var(--gold-deep)}
+.arrow svg{width:2cqw;height:2cqw;display:block}
+.chips{display:flex;align-items:center;gap:.8cqw;flex-wrap:nowrap;justify-content:center;margin-top:1cqw}
+.chip{
+  background:var(--card);border:1px solid var(--line);border-left:3px solid var(--gold);
+  border-radius:10px;padding:.95cqw 1.1cqw;text-align:center;flex:1;min-width:0;
+}
+.chip b{display:block;font-size:12.5px;font-size:1.1cqw;color:var(--navy);text-transform:uppercase;letter-spacing:.06em}
+.chip span{font-size:11px;font-size:.93cqw;color:var(--muted)}
+.guard{
+  margin-top:auto;background:var(--navy);color:#F4F1EA;border-radius:12px;
+  padding:1.4cqw 1.8cqw;display:flex;align-items:center;gap:1.4cqw;
+}
+.guard svg{width:2.6cqw;height:2.6cqw;flex:none;color:var(--gold)}
+.guard b{color:var(--gold);font-size:13.5px;font-size:1.15cqw;letter-spacing:.03em}
+.guard p{font-size:12px;font-size:1.02cqw;line-height:1.5;color:rgba(244,241,234,.85)}
+.split{display:grid;grid-template-columns:1.15fr .85fr;gap:2.4cqw;width:100%;align-items:center}
+.list{list-style:none;display:flex;flex-direction:column;gap:1.05cqw}
+.list li{
+  background:var(--card);border:1px solid var(--line);border-radius:11px;
+  padding:1.15cqw 1.4cqw;display:flex;gap:1.1cqw;align-items:flex-start;
+  font-size:12.5px;font-size:1.08cqw;line-height:1.5;color:var(--ink);
+}
+.list li .num{
+  flex:none;width:2cqw;height:2cqw;border-radius:6px;background:var(--gold-soft);color:var(--gold-deep);
+  display:grid;place-items:center;font-weight:700;font-size:11px;font-size:.95cqw;margin-top:.1cqw;
+}
+.list li b{color:var(--navy)}
+.qr-wrap{display:flex;flex-direction:column;align-items:center;gap:1cqw}
+.qr-card{
+  background:#fff;border:2px solid var(--navy);border-radius:14px;padding:1.6cqw;
+  position:relative;width:19cqw;height:19cqw;box-shadow:var(--shadow);
+}
+.qr-card svg{width:100%;height:100%;display:block}
+.qr-card svg rect{fill:var(--navy)}
+.qr-band{
+  position:absolute;left:-2%;right:-2%;top:50%;transform:translateY(-50%);
+  background:var(--gold);color:var(--navy-deep);font-weight:700;letter-spacing:.42em;
+  text-align:center;font-size:13px;font-size:1.15cqw;padding:.45cqw 0;text-transform:uppercase;
+}
+.qr-cap{font-size:11px;font-size:.95cqw;color:var(--muted);letter-spacing:.06em}
+.icon{width:2.5cqw;height:2.5cqw;color:var(--gold-deep);flex:none}
+.feat-head{display:flex;align-items:center;gap:1cqw}
+.arch{display:grid;grid-template-columns:.9fr 1.1fr;gap:2.6cqw;width:100%;align-items:center;height:100%}
+.stack{display:flex;flex-direction:column;align-items:stretch;gap:0}
+.box{
+  background:var(--card);border:1px solid var(--line);border-radius:11px;
+  padding:1.15cqw 1.5cqw;text-align:center;box-shadow:0 5px 14px rgba(3,60,90,.06);
+}
+.box b{display:block;font-size:13px;font-size:1.15cqw;letter-spacing:.14em;color:var(--navy);text-transform:uppercase}
+.box span{font-size:11px;font-size:.95cqw;color:var(--muted)}
+.vconn{align-self:center;color:var(--gold-deep);height:1.7cqw;display:grid;place-items:center}
+.vconn svg{width:1.4cqw;height:1.4cqw}
+.sidecards{display:flex;flex-direction:column;gap:1.4cqw}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5cqw;width:100%;place-content:center}
+.metric{text-align:left}
+.metric .stat{font-size:40px;font-size:3.4cqw}
+.eval-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1.8cqw;width:100%;place-content:center}
+.eval-box{
+  border:2px dashed var(--gold-deep);background:rgba(201,172,133,.08);
+  border-radius:12px;padding:2cqw;text-align:center;display:flex;flex-direction:column;gap:.6cqw;align-items:center;justify-content:center;
+}
+.eval-box .ph{
+  font-family:'Courier New',monospace;font-weight:700;color:var(--gold-deep);
+  font-size:22px;font-size:2cqw;letter-spacing:.08em;
+}
+.eval-box p{font-size:12px;font-size:1.05cqw;color:var(--muted)}
+.timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5cqw;width:100%;position:relative;place-content:center}
+.titem{position:relative;padding-top:1.6cqw}
+.titem::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--line)}
+.titem::after{
+  content:"";position:absolute;top:-6px;left:0;width:14px;height:14px;border-radius:50%;
+  background:var(--gold);border:3px solid var(--navy);
+}
+.titem .phase{font-size:10.5px;font-size:.9cqw;font-weight:700;letter-spacing:.28em;color:var(--gold-deep);text-transform:uppercase}
+.titem h3{font-family:var(--serif);color:var(--navy);font-size:16px;font-size:1.45cqw;margin:.5cqw 0 .45cqw}
+.titem p{font-size:12px;font-size:1.02cqw;color:var(--muted);line-height:1.5}
+.cover-inner{margin:auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1.7cqw}
+.wordmark{
+  font-family:var(--serif);font-weight:600;color:#F7F5F0;
+  font-size:64px;font-size:6.4cqw;letter-spacing:.42em;text-indent:.42em;line-height:1;
+}
+.word-row{display:flex;align-items:center;gap:1.6cqw}
+.diamond{width:.9cqw;height:.9cqw;background:var(--gold);transform:rotate(45deg)}
+.cover-sub{
+  font-size:19px;font-size:1.75cqw;letter-spacing:.52em;text-indent:.52em;text-transform:uppercase;
+  color:var(--gold);font-weight:600;
+}
+.tagline{
+  font-family:var(--serif);font-style:italic;color:rgba(244,241,234,.92);
+  font-size:17px;font-size:1.6cqw;
+}
+.rule{width:9cqw;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.comp{
+  display:flex;flex-direction:column;gap:.5cqw;align-items:center;
+}
+.comp b{font-size:13px;font-size:1.15cqw;letter-spacing:.3em;text-transform:uppercase;color:#F4F1EA}
+.comp span{font-size:11.5px;font-size:1cqw;letter-spacing:.22em;text-transform:uppercase;color:rgba(244,241,234,.62)}
+.close-inner{margin:auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1.9cqw}
+.contacts{display:flex;gap:2.4cqw;font-size:13px;font-size:1.15cqw;color:rgba(244,241,234,.85);letter-spacing:.04em}
+.contacts b{color:var(--gold)}
+.stack-line{font-size:12.5px;font-size:1.1cqw;letter-spacing:.3em;text-transform:uppercase;color:rgba(244,241,234,.7)}
+.thanks{font-family:var(--serif);font-style:italic;font-size:26px;font-size:2.4cqw;color:#F7F5F0}
+#hud{
+  position:fixed;bottom:0;left:0;right:0;z-index:40;
+  display:flex;align-items:center;justify-content:center;gap:18px;
+  padding:12px 20px 14px;
+}
+.dots{display:flex;gap:8px;background:rgba(3,60,90,.06);padding:9px 14px;border-radius:99px;border:1px solid var(--line)}
+.dot{width:9px;height:9px;border-radius:50%;background:rgba(3,60,90,.22);cursor:pointer;border:none;padding:0;transition:all .25s ease}
+.dot.on{background:var(--navy);transform:scale(1.25)}
+.counter{
+  font-size:12px;font-weight:600;letter-spacing:.22em;color:var(--muted);
+  background:rgba(3,60,90,.06);border:1px solid var(--line);border-radius:99px;padding:9px 16px;
+}
+.counter b{color:var(--navy)}
+.hint{font-size:11px;letter-spacing:.08em;color:var(--muted);opacity:.85}
+.hint kbd{
+  font-family:inherit;background:#fff;border:1px solid var(--line);border-bottom-width:2px;
+  border-radius:5px;padding:1px 6px;font-size:10px;color:var(--navy);font-weight:600;
+}
+@media print{
+  @page{size:297mm 167mm;margin:0}
+  body{overflow:visible;background:#fff}
+  #hud,#progress{display:none !important}
+  #stage{position:static;display:block;padding:0}
+  .slide{
+    display:flex !important;
+    width:297mm;height:167mm;max-height:none;
+    aspect-ratio:16/9;border-radius:0;border:none;border-top:4px solid var(--gold);
+    box-shadow:none;page-break-after:always;break-after:page;
+    animation:none;
+  }
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<main id="stage">
+
+<section class="slide dark active" aria-label="Slide 1 Cover">
+  <div class="kicker corner">SSIA &middot; AI Innovation</div>
+  <div class="cover-inner">
+    <div class="word-row">
+      <span class="diamond"></span>
+      <div class="wordmark">BATIQA</div>
+      <span class="diamond"></span>
+    </div>
+    <div class="cover-sub">AI Guest Assistant</div>
+    <div class="tagline">&ldquo;Smart Concierge for a Smarter Stay&rdquo;</div>
+    <div class="rule"></div>
+    <div class="comp">
+      <b>SSIA &mdash; AI Innovation Competition</b>
+      <span>Tingkat Nasional &middot; Hotel BATIQA Pekanbaru</span>
+    </div>
+  </div>
+</section>
+
+<section class="slide" aria-label="Slide 2 Masalah">
+  <header class="top">
+    <div class="kicker">01 &middot; Masalah</div>
+    <div class="pageno"><b>02</b> / 12</div>
+  </header>
+  <h2>Front office dibanjiri hal-hal yang seharusnya selesai dalam <em>detik</em>.</h2>
+  <div class="body">
+    <div class="grid cols-3">
+      <div class="card accent">
+        <div class="stat">~70%<span>*</span></div>
+        <h3>Panggilan FO Bersifat Sepele</h3>
+        <p>Handuk ekstra, jam sarapan, password WiFi &mdash; semua lewat telepon, menginterupsi kerja front desk berulang kali setiap hari.</p>
+      </div>
+      <div class="card accent">
+        <div class="stat">EN / ID</div>
+        <h3>Hambatan Bahasa</h3>
+        <p>Tamu internasional vs staf yang tidak selalu bilingual &mdash; request disampaikan salah, dieksekusi keliru, atau diulang berkali-kali.</p>
+      </div>
+      <div class="card accent">
+        <div class="stat">0 Jejak</div>
+        <h3>Request Manual Tersebar</h3>
+        <p>Lisan dan telepon tidak tercatat sistematis: tanpa tiket, tanpa prioritas, tanpa SLA &mdash; sulit diaudit dan mudah terlewat.</p>
+      </div>
+    </div>
+    <p class="note">*Estimasi industri perhotelan; angka pasti akan divalidasi melalui pilot di property.</p>
+  </div>
+</section>
+
+<section class="slide" aria-label="Slide 3 Solusi">
+  <header class="top">
+    <div class="kicker">02 &middot; Solusi</div>
+    <div class="pageno"><b>03</b> / 12</div>
+  </header>
+  <div class="body" style="flex-direction:column;justify-content:center">
+    <p class="big-statement">Satu QR code mengubah setiap kamar menjadi <em>concierge pribadi</em> &mdash; tanpa aplikasi, tanpa antre, tanpa salah paham.</p>
+    <div class="flow">
+      <div class="node">
+        <div class="idx">1</div>
+        <b>QR Scan</b>
+        <span>Tamu scan kode di kamar, langsung masuk web app</span>
+      </div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="node">
+        <div class="idx">2</div>
+        <b>Chat AI</b>
+        <span>Bahasa natural ID / EN, dipahami konteksnya</span>
+      </div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="node">
+        <div class="idx">3</div>
+        <b>Tiket Otomatis</b>
+        <span>Intent diterjemahkan jadi tiket terstruktur + prioritas</span>
+      </div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="node">
+        <div class="idx">4</div>
+        <b>Staff</b>
+        <span>Dashboard real-time, route per departemen</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" aria-label="Slide 4 Live Demo">
+  <header class="top">
+    <div class="kicker">03 &middot; Live Demo</div>
+    <div class="pageno"><b>04</b> / 12</div>
+  </header>
+  <h2>Lihat langsung: dari kamar ke dashboard dalam <em>satu menit</em>.</h2>
+  <div class="body">
+    <div class="split">
+      <div style="display:flex;flex-direction:column;gap:1.3cqw">
+        <ul class="list">
+          <li><span class="num">A</span><span><b>Persiapan presenter:</b> jalankan <b>run.bat</b> (MongoDB + seed + server :8080), siapkan HP tamu &amp; dashboard staff di layar kedua.</span></li>
+          <li><span class="num">1</span><span><b>Scan QR</b> dari HP &mdash; landing chat terbuka instan di browser, tanpa install apa pun.</span></li>
+          <li><span class="num">2</span><span><b>Tanya jam sarapan dalam English</b> &mdash; jawaban akurat langsung dari data hotel terverifikasi.</span></li>
+          <li><span class="num">3</span><span><b>&ldquo;AC saya rusak&rdquo; + foto</b> &mdash; tiket HIGH dibuat otomatis dan muncul live di Operations Dashboard.</span></li>
+        </ul>
+      </div>
+      <div class="qr-wrap">
+        <div class="qr-card">
+          <svg id="qr" role="img" aria-label="Mock QR code demo"></svg>
+          <div class="qr-band">Scan Me</div>
+        </div>
+        <div class="qr-cap">batiqa-demo.local/r/101 &middot; mock</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" aria-label="Slide 5 Fitur Utama">
+  <header class="top">
+    <div class="kicker">04 &middot; Fitur Utama</div>
+    <div class="pageno"><b>05</b> / 12</div>
+  </header>
+  <h2>Enam kemampuan inti, <em>satu pengalaman</em> yang mulus.</h2>
+  <div class="body">
+    <div class="grid cols-3">
+      <div class="card">
+        <div class="feat-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 12.5h5"/></svg>
+          <h3>Chat Natural Multi-Bahasa</h3>
+        </div>
+        <p>ID / EN terdeteksi otomatis per pesan &mdash; tamu bicara apa adanya, AI merespons dalam bahasa yang sama.</p>
+      </div>
+      <div class="card">
+        <div class="feat-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="12" cy="13.2" r="3.4"/></svg>
+          <h3>Photo-to-Ticket Vision</h3>
+        </div>
+        <p>Foto kerusakan dianalisis jadi deskripsi tiket terstruktur &mdash; teknisi tahu masalahnya sebelum datang.</p>
+      </div>
+      <div class="card">
+        <div class="feat-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18.5 18.5h2.5v2.5h-2.5z"/></svg>
+          <h3>QR Login</h3>
+        </div>
+        <p>Satu scan dari kamar &mdash; tanpa download, tanpa registrasi akun. Zero-friction bagi tamu.</p>
+      </div>
+      <div class="card">
+        <div class="feat-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          <h3>Real-time Ops Dashboard</h3>
+        </div>
+        <p>Tiket baru &amp; perubahan status ter-push via SSE &mdash; staff melihat dan bertindak tanpa refresh.</p>
+      </div>
+      <div class="card">
+        <div class="feat-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16M4 20V6"/><path d="M8.5 16v-4.5M12.5 16V7.5M16.5 16v-3"/></svg>
+          <h3>Analytics &amp; SLA</h3>
+        </div>
+        <p>Volume per kategori, distribusi prioritas, waktu respons &mdash; dasar pengambilan keputusan harian.</p>
+      </div>
+      <div class="card">
+        <div class="feat-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 3v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z"/><path d="M8.8 12l2.2 2.2 4.2-4.4"/></svg>
+          <h3>Anti-Hallucination Guard</h3>
+        </div>
+        <p>Info hotel &amp; rekomendasi WAJIB dari database terverifikasi &mdash; AI tidak boleh mengarang fakta.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" aria-label="Slide 6 Cara Kerja AI">
+  <header class="top">
+    <div class="kicker">05 &middot; Cara Kerja AI</div>
+    <div class="pageno"><b>06</b> / 12</div>
+  </header>
+  <h2>Satu pesan, enam tahap <em>deterministik</em>.</h2>
+  <div class="body" style="flex-direction:column;justify-content:center">
+    <div class="chips">
+      <div class="chip"><b>Language</b><span>deteksi ID / EN</span></div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 5l7 7-7 7"/></svg></div>
+      <div class="chip"><b>Intent</b><span>klasifikasi niat tamu</span></div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 5l7 7-7 7"/></svg></div>
+      <div class="chip"><b>Entity</b><span>kamar, item, waktu</span></div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 5l7 7-7 7"/></svg></div>
+      <div class="chip"><b>Routing</b><span>departemen tujuan</span></div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 5l7 7-7 7"/></svg></div>
+      <div class="chip"><b>Priority</b><span>LOW / MED / HIGH</span></div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 5l7 7-7 7"/></svg></div>
+      <div class="chip"><b>Action</b><span>tiket / jawaban</span></div>
+    </div>
+    <div class="guard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 3v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6z"/><path d="M8.8 12l2.2 2.2 4.2-4.4"/></svg>
+      <div>
+        <b>Prinsip inti: AI never touches DB directly.</b>
+        <p>Setiap output AI diparse &amp; divalidasi service layer &mdash; hanya hasil yang lolos validasi yang menjadi jawaban atau tiket. Intent UNKNOWN selalu diminta klarifikasi, tidak pernah ditebak.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" aria-label="Slide 7 Keamanan">
+  <header class="top">
+    <div class="kicker">06 &middot; Keamanan</div>
+    <div class="pageno"><b>07</b> / 12</div>
+  </header>
+  <h2>Aman secara desain, bukan <em>tempelan</em>.</h2>
+  <div class="body">
+    <div class="grid cols-2">
+      <div class="card accent">
+        <h3>HMAC-Signed QR Token</h3>
+        <p>Token akses per-kamar ditandatangani HMAC &mdash; kedaluwarsa terkontrol dan mustahil dipalsukan tanpa server secret.</p>
+      </div>
+      <div class="card accent">
+        <h3>bcrypt + Session Persisten</h3>
+        <p>Kredensial staff di-hash bcrypt; sesi login persisten &amp; aman &mdash; tidak ada password plaintext di mana pun.</p>
+      </div>
+      <div class="card accent">
+        <h3>Rate Limiting</h3>
+        <p>Endpoint publik dibatasi laju aksesnya &mdash; spam, scraping, dan percobaan brute-force tertahan di gerbang.</p>
+      </div>
+      <div class="card accent">
+        <h3>Least-Privilege Endpoints</h3>
+        <p>Aksi tulis staff wajib Bearer token; tamu tidak pernah bisa menyentuh endpoint operasional mana pun.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" aria-label="Slide 8 Arsitektur Teknis">
+  <header class="top">
+    <div class="kicker">07 &middot; Arsitektur Teknis</div>
+    <div class="pageno"><b>08</b> / 12</div>
+  </header>
+  <h2>Berlapis, <em>stateless</em>, mudah diganti tiap komponennya.</h2>
+  <div class="body">
+    <div class="arch">
+      <div class="stack">
+        <div class="box"><b>Handler</b><span>HTTP routing &amp; validasi input</span></div>
+        <div class="vconn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 4v16M6 14l6 6 6-6"/></svg></div>
+        <div class="box"><b>Service</b><span>AI pipeline &middot; business logic tiket</span></div>
+        <div class="vconn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 4v16M6 14l6 6 6-6"/></svg></div>
+        <div class="box"><b>Repository</b><span>akses data &middot; counter atomik TKT-000001</span></div>
+        <div class="vconn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 4v16M6 14l6 6 6-6"/></svg></div>
+        <div class="box" style="border-left:3px solid var(--gold)"><b>MongoDB</b><span>persistence &middot; kompatibel Compass</span></div>
+      </div>
+      <div class="sidecards">
+        <div class="card accent">
+          <h3>Gemini Provider Abstraction</h3>
+          <p>Panggilan LLM dibungkus interface &mdash; jika Gemini gagal / kuota habis, <b>rule-based fallback</b> otomatis mengambil alih. Demo tidak akan mati.</p>
+        </div>
+        <div class="card accent">
+          <h3>SSE Real-Time</h3>
+          <p>Server-Sent Events mendorong update tiket ke dashboard staff secara live &mdash; tanpa polling, hemat resource.</p>
+        </div>
+        <div class="card accent">
+          <h3>Go net/http Murni</h3>
+          <p>Tanpa framework &mdash; dependensi minimal, performa tinggi, mudah diaudit keamanannya.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" aria-label="Slide 9 Business Value">
+  <header class="top">
+    <div class="kicker">08 &middot; Business Value</div>
+    <div class="pageno"><b>09</b> / 12</div>
+  </header>
+  <h2>Nilai yang bisa diukur &mdash; dan kami <em>jujur</em> soal angkanya.</h2>
+  <div class="body">
+    <div class="metrics">
+      <div class="metric card accent">
+        <div class="stat">-30&ndash;50%<span>*</span></div>
+        <h3>Panggilan FO Rutin</h3>
+        <p>Pertanyaan sepele dialihkan ke self-service chat &mdash; front desk fokus pada tamu yang benar-benar butuh.</p>
+      </div>
+      <div class="metric card accent">
+        <div class="stat">&lt; 60 dtk</div>
+        <h3>Request &rarr; Departemen</h3>
+        <p>Routing otomatis hitungan detik &mdash; bukan menit menunggu telepon disambung dan dicatat ulang.</p>
+      </div>
+      <div class="metric card accent">
+        <div class="stat">100%</div>
+        <h3>Tercatat &amp; Auditable</h3>
+        <p>Setiap request punya tiket: status, riwayat penanganan, dan penanggung jawab jelas.</p>
+      </div>
+      <div class="metric card accent">
+        <div class="stat">Harian</div>
+        <h3>Analytics Otomatis</h3>
+        <p>Data volume, kategori, dan SLA terkumpul sendiri &mdash; tanpa rekap manual di spreadsheet.</p>
+      </div>
+    </div>
+    <p class="note">*Angka merupakan estimasi internal berbasis pain point operasional &mdash; akan divalidasi dengan data pilot nyata, bukan klaim final.</p>
+  </div>
+</section>
+
+<section class="slide" aria-label="Slide 10 Evaluasi AI">
+  <header class="top">
+    <div class="kicker">09 &middot; Evaluasi AI</div>
+    <div class="pageno"><b>10</b> / 12</div>
+  </header>
+  <h2>Kami mengukur AI dengan <em>metodologi</em>, bukan kesan.</h2>
+  <div class="body" style="flex-direction:column;justify-content:center;gap:1.8cqw">
+    <div class="eval-grid">
+      <div class="eval-box">
+        <div class="ph">[ISI ANGKA EVAL]</div>
+        <p><b>Akurasi Intent Classification</b> &mdash; benar / total skenario</p>
+      </div>
+      <div class="eval-box">
+        <div class="ph">[ISI ANGKA EVAL]</div>
+        <p><b>Akurasi Routing Departemen</b> &mdash; benar / total skenario</p>
+      </div>
+    </div>
+    <div class="guard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16M4 20V6"/><path d="M8.5 16v-4.5M12.5 16V7.5M16.5 16v-3"/></svg>
+      <div>
+        <b>Metodologi: 30 skenario uji terstandar.</b>
+        <p>Campuran bahasa ID / EN, mencakup seluruh intent utama + kasus ambigu &amp; adversarial; dinilai terhadap ground truth manual. Slot angka diisi setelah run evaluasi final.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" aria-label="Slide 11 Roadmap">
+  <header class="top">
+    <div class="kicker">10 &middot; Roadmap Pasca-MVP</div>
+    <div class="pageno"><b>11</b> / 12</div>
+  </header>
+  <h2>MVP ini fondasi &mdash; <em>bukan garis akhir</em>.</h2>
+  <div class="body">
+    <div class="timeline">
+      <div class="titem">
+        <div class="phase">Fase 1</div>
+        <h3>Multi-Hotel Tenancy</h3>
+        <p>Satu deployment untuk banyak properti &mdash; isolasi data &amp; admin per hotel, siap untuk skala jaringan BATIQA.</p>
+      </div>
+      <div class="titem">
+        <div class="phase">Fase 2</div>
+        <h3>Voice Concierge</h3>
+        <p>Speech-to-text &amp; text-to-speech &mdash; tamu cukup bicara, tanpa mengetik sama sekali.</p>
+      </div>
+      <div class="titem">
+        <div class="phase">Fase 3</div>
+        <h3>Integrasi PMS</h3>
+        <p>Sinkron check-in/out, status kamar, dan billing langsung dengan Property Management System.</p>
+      </div>
+      <div class="titem">
+        <div class="phase">Fase 4</div>
+        <h3>Bahasa Tambahan</h3>
+        <p>Mandarin, Arab, dan bahasa lain mengikuti demografi tamu &mdash; arsitektur sudah siap multi-bahasa.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide dark" aria-label="Slide 12 Penutup">
+  <div class="kicker corner">SSIA &middot; AI Innovation</div>
+  <div class="close-inner">
+    <div class="word-row">
+      <span class="diamond"></span>
+      <div class="wordmark" style="font-size:4.4cqw">BATIQA</div>
+      <span class="diamond"></span>
+    </div>
+    <div class="thanks">Terima kasih &mdash; mari diskusikan masa depan hospitality yang lebih pintar.</div>
+    <div class="contacts">
+      <span><b>Tim</b> &mdash; [Nama Tim]</span>
+      <span><b>Email</b> &mdash; [email@kontak]</span>
+      <span><b>Repo</b> &mdash; [link-repository]</span>
+    </div>
+    <div class="rule"></div>
+    <div class="stack-line">Built with Go &middot; MongoDB &middot; Gemini</div>
+    <div class="comp">
+      <b>SSIA &mdash; AI Innovation Competition</b>
+      <span>Hotel BATIQA Pekanbaru</span>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<aside id="hud">
+  <div class="dots" id="dots" role="tablist" aria-label="Indikator slide"></div>
+  <div class="counter"><b id="cur">01</b> / <span id="total">12</span></div>
+  <div class="hint"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> navigasi &nbsp;&middot;&nbsp; <kbd>F</kbd> fullscreen &nbsp;&middot;&nbsp; swipe di layar sentuh</div>
+</aside>
+
+<script>
+(function(){
+  var slides=[].slice.call(document.querySelectorAll('.slide'));
+  var cur=0,N=slides.length;
+  var dotsEl=document.getElementById('dots'),curEl=document.getElementById('cur');
+  document.getElementById('total').textContent=('0'+N).slice(-2);
+  slides.forEach(function(s,i){
+    var d=document.createElement('button');
+    d.className='dot'+(i===0?' on':'');
+    d.setAttribute('aria-label','Slide '+(i+1));
+    d.addEventListener('click',function(){go(i);});
+    dotsEl.appendChild(d);
+  });
+  var dots=[].slice.call(dotsEl.children);
+  function pad(n){return ('0'+(n+1)).slice(-2);}
+  function go(n){
+    if(n<0)n=0;if(n>N-1)n=N-1;
+    slides[cur].classList.remove('active');
+    cur=n;
+    slides[cur].classList.add('active');
+    dots.forEach(function(d,i){d.classList.toggle('on',i===cur);});
+    curEl.textContent=pad(cur);
+    document.getElementById('progress').style.width=((cur)/(N-1)*100)+'%';
+    try{history.replaceState(null,'','#'+(cur+1));}catch(e){}
+  }
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key==='PageDown'||e.key===' '){
+      e.preventDefault();go(cur+1);
+    }else if(e.key==='ArrowLeft'||e.key==='ArrowUp'||e.key==='PageUp'){
+      e.preventDefault();go(cur-1);
+    }else if(e.key==='Home'){go(0);}
+    else if(e.key==='End'){go(N-1);}
+    else if(e.key==='f'||e.key==='F'){toggleFS();}
+  });
+  var x0=null;
+  document.addEventListener('touchstart',function(e){
+    if(e.touches.length===1)x0=e.touches[0].clientX;
+  },{passive:true});
+  document.addEventListener('touchend',function(e){
+    if(x0===null)return;
+    var dx=e.changedTouches[0].clientX-x0;
+    if(Math.abs(dx)>48)go(cur+(dx<0?1:-1));
+    x0=null;
+  },{passive:true});
+  function toggleFS(){
+    if(document.fullscreenElement){document.exitFullscreen();}
+    else if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen();}
+  }
+  var h=parseInt((location.hash||'').replace('#',''),10);
+  if(!isNaN(h)&&h>=1&&h<=N){
+    slides[cur].classList.remove('active');cur=h-1;slides[cur].classList.add('active');
+    dots.forEach(function(d,i){d.classList.toggle('on',i===cur);});
+    curEl.textContent=pad(cur);
+    document.getElementById('progress').style.width=((cur)/(N-1)*100)+'%';
+  }
+  (function makeQr(){
+    var svg=document.getElementById('qr');if(!svg)return;
+    var NS='http://www.w3.org/2000/svg',n=21,s=16,seed=20240501;
+    function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
+    function cell(cx,cy){
+      var r=document.createElementNS(NS,'rect');
+      r.setAttribute('x',cx*s);r.setAttribute('y',cy*s);
+      r.setAttribute('width',s);r.setAttribute('height',s);
+      svg.appendChild(r);
+    }
+    function finder(ox,oy){
+      for(var i=0;i<7;i++)for(var j=0;j<7;j++){
+        var edge=(i===0||i===6||j===0||j===6),core=(i>1&&i<5&&j>1&&j<5);
+        if(edge||core)cell(ox+i,oy+j);
+      }
+    }
+    finder(0,0);finder(n-7,0);finder(0,n-7);
+    for(var k=8;k<n-8;k+=2){cell(k,6);cell(6,k);}
+    for(var y=0;y<n;y++)for(var x=0;x<n;x++){
+      var fz=(x<8&&y<8)||(x>=n-8&&y<8)||(x<8&&y>=n-8);
+      if(fz||x===6||y===6||(x>7&&x<13&&y>7&&y<13))continue;
+      if(rnd()<0.44)cell(x,y);
+    }
+    svg.setAttribute('viewBox','0 0 '+(n*s)+' '+(n*s));
+    svg.setAttribute('shape-rendering','crispEdges');
+  })();
+})();
+</script>
+</body>
+</html>

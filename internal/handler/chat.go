@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"batiqa-ai/internal/model"
 	"batiqa-ai/internal/repository"
@@ -39,11 +41,13 @@ func NewChatHandlerFull(aiSvc *ai.Service, ticketSvc *ticketservice.Service, con
 	return &ChatHandler{ai: aiSvc, tickets: ticketSvc, convs: convRepo, guests: guestRepo, hotelInfos: hotelRepo, recs: recRepo}
 }
 
-// ChatRequest per AI CHAT.MD
+// ChatRequest per AI CHAT.MD. Token is optional here when the router-level
+// guest middleware already validated the header/query token.
 type ChatRequest struct {
 	SessionID  string `json:"session_id"`
 	RoomNumber string `json:"room_number"`
 	Message    string `json:"message"`
+	Token      string `json:"token,omitempty"`
 }
 
 // ChatResponse per AI CHAT.MD
@@ -81,19 +85,25 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verified QR-token room wins over anything the client claims; guests
+	// cannot create tickets or chats for a different room.
+	resolvedRoom := GuestRoom(r)
+	if resolvedRoom == "" {
+		resolvedRoom = req.RoomNumber // legacy/dev path without token
+	}
+
 	// Persist guest session (upsert) - room not invented.
 	// Non-fatal: guest data is auxiliary; never block the chat flow on it.
 	var roomPtr *string
-	if req.RoomNumber != "" {
-		roomPtr = &req.RoomNumber
+	if resolvedRoom != "" {
+		roomPtr = &resolvedRoom
 	}
 	if _, err := h.guests.Upsert(req.SessionID, roomPtr, ai.DetectLanguage(req.Message)); err != nil {
 		fmt.Printf("guest upsert failed (non-fatal): %v\n", err)
 	}
 
-	// Load conversation history for context (multi-turn chat) BEFORE saving the
-	// current message, then persist it. Best-effort: history is optional.
-	historyTurns := loadHistory(h.convs, req.SessionID, 10)
+	// Save user message AFTER loading history so the AI request contains prior turns.
+	aiReq := h.newAIRequest(req.SessionID, resolvedRoom, req.Message)
 	_ = h.convs.Create(&model.Conversation{
 		SessionID: req.SessionID,
 		Role:      model.RoleUser,
@@ -104,44 +114,19 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Call AI service (with validation, fallback, no crash).
 	// Verified hotel facts + recommendations are injected so the LLM can compose
 	// natural answers from data instead of templated text per AI KNOWLEDGE SOURCE.md.
-	aiReq := ai.Request{
-		SessionID:  req.SessionID,
-		RoomNumber: req.RoomNumber,
-		Message:    req.Message,
-		History:    historyTurns,
-		Facts:      h.verifiedFacts(),
+	aiResult, err := h.ai.Process(r.Context(), *aiReq)
+	if err != nil {
+		fmt.Printf("AI fallback engaged: %v\n", err)
 	}
-	aiResult, err := h.ai.Process(r.Context(), aiReq)
 	if err != nil || aiResult == nil {
 		// Defensive: Process guarantees non-nil result, but guard anyway per ERROR FLOW.md
-		aiResult = &ai.AIResult{
-			Intent:   ai.IntentUnknown,
-			Language: ai.LangID,
-			Entities: map[string]interface{}{},
-			Action:   ai.Action{Type: ai.ActionClarify},
-			Response: "Maaf, layanan AI sedang mengalami gangguan. Silakan coba kembali beberapa saat lagi.",
-		}
+		fb := aiFallbackResult()
+		aiResult = &fb
 	}
 
 	// Rule-based provider has no access to injected facts, so answers are composed
 	// from DB templates here. With Gemini active we trust its fact-grounded phrasing.
-	if h.ai.IsRuleBased() {
-		if h.hotelInfos != nil && isInfoIntent(aiResult.Intent) {
-			if infoResp := h.getHotelInfoResponse(aiResult.Intent, aiResult.Language); infoResp != "" {
-				aiResult.Response = wrapInfo(infoResp, aiResult.Language)
-			} else {
-				// If no data, use fallback per spec
-				if aiResult.Language == ai.LangEN {
-					aiResult.Response = "Sorry, I don't have that information yet. Please contact Front Office."
-				} else {
-					aiResult.Response = "Maaf, saya belum memiliki informasi tersebut. Silakan hubungi Front Office."
-				}
-			}
-		}
-		if h.recs != nil && isRecommendationIntent(aiResult.Intent) && aiResult.Action.Type == ai.ActionAnswer {
-			h.enrichRecommendationResponse(aiResult)
-		}
-	}
+	h.applyRuleBasedOverrides(aiResult)
 
 	// Store assistant conversation (best effort)
 	_ = h.convs.Create(&model.Conversation{
@@ -151,50 +136,8 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Intent:    &aiResult.Intent,
 	})
 
-	// If AI requires ticket, attempt to create via Ticket Service (backend validation)
-	var ticketID *string
+	ticketID := h.maybeCreateTicket(r, aiResult, req.Message, resolvedRoom)
 	requiresTicket := aiResult.RequiresTicket
-
-	if requiresTicket {
-		// Check missing room_number: if not in entities and no provided room, do not create, ask for room
-		if _, ok := aiResult.Entities["room_number"]; !ok && req.RoomNumber == "" {
-			// Missing room flow per MISSING ROOM NUMBER.md
-			requiresTicket = true
-			ticketID = nil
-		} else {
-			t, err := h.tickets.CreateFromAI(aiResult, req.Message)
-			if err != nil {
-				switch {
-				case errors.Is(err, ticketservice.ErrRoomRequired):
-					requiresTicket = true
-					ticketID = nil
-					if !strings.Contains(strings.ToLower(aiResult.Response), "kamar") && !strings.Contains(strings.ToLower(aiResult.Response), "room") {
-						if aiResult.Language == ai.LangEN {
-							aiResult.Response = "Sure, I can help. Could you please tell me your room number?"
-						} else {
-							aiResult.Response = "Baik, saya bisa membantu. Boleh saya tahu nomor kamar Anda?"
-						}
-					}
-				case ticketservice.IsValidationError(err):
-					// Validation error -> do not create ticket
-					requiresTicket = false
-					ticketID = nil
-				default:
-					// Internal DB error -> keep requires_ticket true but no ticket, inform guest of temporary failure
-					requiresTicket = true
-					ticketID = nil
-					if aiResult.Language == ai.LangEN {
-						aiResult.Response = "Sorry, I couldn't create your ticket due to a temporary issue. Please try again shortly or contact Front Office."
-					} else {
-						aiResult.Response = "Maaf, saya tidak bisa membuat tiket karena gangguan sementara. Silakan coba lagi atau hubungi Front Office."
-					}
-				}
-			} else {
-				s := t.TicketNumber
-				ticketID = &s
-			}
-		}
-	}
 
 	resp := ChatResponse{
 		Message:        aiResult.Response,
@@ -203,6 +146,93 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		TicketID:       ticketID,
 	}
 	WriteJSON(w, http.StatusOK, resp)
+}
+
+// newAIRequest assembles the AI request with conversation history and verified facts.
+func (h *ChatHandler) newAIRequest(sessionID, room, message string) *ai.Request {
+	return &ai.Request{
+		SessionID:  sessionID,
+		RoomNumber: room,
+		Message:    message,
+		History:    loadHistory(h.convs, sessionID, 10),
+		Facts:      h.verifiedFacts(),
+	}
+}
+
+// aiFallbackResult is the controlled ERROR FLOW response.
+func aiFallbackResult() ai.AIResult {
+	return ai.AIResult{
+		Intent:   ai.IntentUnknown,
+		Language: ai.LangID,
+		Entities: map[string]interface{}{},
+		Action:   ai.Action{Type: ai.ActionClarify},
+		Response: "Maaf, layanan AI sedang mengalami gangguan. Silakan coba kembali beberapa saat lagi.",
+	}
+}
+
+// applyRuleBasedOverrides composes DB-backed answers only when the primary AI
+// provider is rule-based; Gemini answers are already fact-grounded.
+func (h *ChatHandler) applyRuleBasedOverrides(res *ai.AIResult) {
+	if !h.ai.IsRuleBased() {
+		return
+	}
+	if h.hotelInfos != nil && isInfoIntent(res.Intent) {
+		if infoResp := h.getHotelInfoResponse(res.Intent, res.Language); infoResp != "" {
+			res.Response = wrapInfo(infoResp, res.Language)
+		} else if res.Language == ai.LangEN {
+			res.Response = "Sorry, I don't have that information yet. Please contact Front Office."
+		} else {
+			res.Response = "Maaf, saya belum memiliki informasi tersebut. Silakan hubungi Front Office."
+		}
+	}
+	if h.recs != nil && isRecommendationIntent(res.Intent) && res.Action.Type == ai.ActionAnswer {
+		h.enrichRecommendationResponse(res)
+	}
+}
+
+// maybeCreateTicket runs the guarded ticket-creation flow per MISSING ROOM NUMBER.md
+// and TICKET CONFIRMATION policy. Returns the ticket number when created.
+func (h *ChatHandler) maybeCreateTicket(r *http.Request, aiResult *ai.AIResult, originalMessage, resolvedRoom string) *string {
+	if !aiResult.RequiresTicket {
+		return nil
+	}
+	// Token room is authoritative: inject into entities so the AI cannot claim another room.
+	if resolvedRoom != "" {
+		if aiResult.Entities == nil {
+			aiResult.Entities = map[string]interface{}{}
+		}
+		aiResult.Entities["room_number"] = resolvedRoom
+	}
+
+	// Missing room flow: ask first, never invent.
+	if _, ok := aiResult.Entities["room_number"]; !ok || strings.TrimSpace(fmt.Sprint(aiResult.Entities["room_number"])) == "" {
+		return nil
+	}
+
+	t, err := h.tickets.CreateFromAI(aiResult, originalMessage)
+	if err != nil {
+		switch {
+		case errors.Is(err, ticketservice.ErrRoomRequired):
+			if !strings.Contains(strings.ToLower(aiResult.Response), "kamar") && !strings.Contains(strings.ToLower(aiResult.Response), "room") {
+				if aiResult.Language == ai.LangEN {
+					aiResult.Response = "Sure, I can help. Could you please tell me your room number?"
+				} else {
+					aiResult.Response = "Baik, saya bisa membantu. Boleh saya tahu nomor kamar Anda?"
+				}
+			}
+		case ticketservice.IsValidationError(err):
+			// Validation error -> no ticket created
+		default:
+			if aiResult.Language == ai.LangEN {
+				aiResult.Response = "Sorry, I couldn't create your ticket due to a temporary issue. Please try again shortly or contact Front Office."
+			} else {
+				aiResult.Response = "Maaf, saya tidak bisa membuat tiket karena gangguan sementara. Silakan coba lagi atau hubungi Front Office."
+			}
+		}
+		return nil
+	}
+	s := t.TicketNumber
+	return &s
 }
 
 // loadHistory returns the last N conversation turns for a session (oldest first),
@@ -254,16 +284,28 @@ func (h *ChatHandler) verifiedFacts() []string {
 				if r.Description != nil && *r.Description != "" {
 					line += fmt.Sprintf(" - %s", *r.Description)
 				}
+				if r.Address != nil && *r.Address != "" {
+					line += fmt.Sprintf(" | address: %s", *r.Address)
+				}
 				if r.PriceMin != nil && r.PriceMax != nil && *r.PriceMax > 0 {
 					line += fmt.Sprintf(" | price Rp%d-Rp%d", *r.PriceMin, *r.PriceMax)
 				}
 				if r.DistanceKm != nil {
 					line += fmt.Sprintf(" | distance %.1f km", *r.DistanceKm)
 				}
+				if r.MapsLink != nil && *r.MapsLink != "" {
+					line += fmt.Sprintf(" | Google Maps: %s", *r.MapsLink)
+				}
 				facts = append(facts, line)
 				count++
 			}
 		}
+	}
+	// Live weather for Pekanbaru (Open-Meteo, no API key, best-effort).
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if w := currentWeather(ctx); w != "" {
+		facts = append(facts, "LIVE_WEATHER | Pekanbaru | "+w)
 	}
 	return facts
 }
@@ -369,6 +411,10 @@ func (h *ChatHandler) enrichRecommendationResponse(res *ai.AIResult) {
 			b.WriteString(" (")
 			b.WriteString(strings.Join(details, ", "))
 			b.WriteString(")")
+		}
+		if it.MapsLink != nil && *it.MapsLink != "" {
+			b.WriteString("\n   📍 ")
+			b.WriteString(*it.MapsLink)
 		}
 	}
 	res.Response = b.String()

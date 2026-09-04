@@ -8,10 +8,27 @@
   const badge = document.getElementById('roomBadge');
   const refreshBtn = document.getElementById('refreshBtn');
 
-  const room = getRoom();
-  if(room){
-    badge.textContent='Room '+room;
-    badge.style.display='block';
+  let room = getRoom();
+  function setBadge(){
+    if(room){
+      badge.textContent='Room '+room;
+      badge.style.display='block';
+    }
+  }
+  setBadge();
+
+  // Identitas kamar via guest token QR (fallback bila ?room tidak ada)
+  if(!room && typeof API.getGuestMe === 'function'){
+    API.getGuestMe()
+      .then(me=>{
+        if(me && me.room_number){
+          room = me.room_number;
+          setRoom(room);
+          setBadge();
+          loadTickets();
+        }
+      })
+      .catch(()=>{ /* token invalid / offline */ });
   }
 
   function showLoading(v){ loading.style.display = v?'flex':'none'; }
@@ -48,6 +65,7 @@
       // If no room, fetch all but will be empty for guest without room - show empty
       const data = await API.getTickets(params);
       const tickets = data.tickets || [];
+      if(statusWatcher) statusWatcher.refresh(tickets);
       showLoading(false);
       if(tickets.length===0){
         empty.style.display='block';
@@ -86,7 +104,10 @@
       listEl.style.display='grid';
     }catch(e){
       showLoading(false);
-      showError(e.message || 'Failed to load. Check connection.');
+      const invalidSession = e && (e.status === 401 || e.status === 403);
+      showError(invalidSession
+        ? 'Sesi tidak valid. Silakan scan ulang QR di kamar Anda.'
+        : (e.message || 'Failed to load. Check connection.'));
       console.error(e);
     }
   }
@@ -98,6 +119,14 @@
   }
 
   refreshBtn.addEventListener('click', loadTickets);
+
+  // Real-time status notification watcher (uses foreground Web Notification when
+  // a ticket moves to a new step). Best-effort; never blocks page.
+  let statusWatcher = null;
+  if(typeof window.BATIQA !== 'undefined' && window.BATIQA.watchTicketStatus){
+    statusWatcher = window.BATIQA.watchTicketStatus(30000);
+  }
+
   loadTickets();
   // Auto refresh every 15s for status updates ( Guest Notification flow )
   setInterval(loadTickets, 15000);

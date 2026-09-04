@@ -76,6 +76,11 @@ func (h *TicketHandler) List(w http.ResponseWriter, r *http.Request) {
 	if v := strings.TrimSpace(q.Get("room")); v != "" {
 		filter.RoomNumber = &v
 	}
+	// Security: a verified QR-token guest is always scoped to their own room,
+	// regardless of what query they pass.
+	if gr := GuestRoom(r); gr != "" {
+		filter.RoomNumber = &gr
+	}
 
 	list, err := h.tickets.List(filter)
 	if err != nil {

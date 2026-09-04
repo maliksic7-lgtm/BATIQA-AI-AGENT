@@ -1,0 +1,814 @@
+openapi: 3.0.3
+info:
+  title: BATIQA AI Guest Assistant API
+  version: 1.0.0
+  description: |
+    API backend untuk asisten tamu Hotel BATIQA Pekanbaru. Menghubungkan
+    tamu (via QR token) dengan pipeline AI (Gemini + fallback rule-based),
+    pembuatan tiket operasional, dan dasbor staf secara real-time (SSE).
+
+    ## Autentikasi
+    - **Token tamu (QR)**: header `X-Guest-Token` atau query `?t=<token>`.
+      Token dihasilkan dari `GET /api/rooms/{room}/qr`, bertanda tangan HMAC-SHA256.
+    - **Staf**: header `Authorization: Bearer <token>` dari `POST /api/staff/login`.
+
+    Kontrak lengkap dapat dilihat di UI Swagger interaktif pada `/api/docs`.
+servers:
+  - url: http://localhost:8080
+    description: Lokal
+tags:
+  - name: Health
+    description: Kesehatan layanan
+  - name: Chat
+    description: Percakapan AI tamu (teks & foto)
+  - name: Tickets
+    description: Tiket permintaan/layanan tamu
+  - name: Staff
+    description: Autentikasi & sesi staf
+  - name: Guest
+    description: Identitas tamu dari token QR
+  - name: Content
+    description: Info hotel & rekomendasi lokal (publik)
+  - name: Analytics
+    description: Statistik & analitik operasional
+  - name: Live
+    description: Event real-time (SSE)
+  - name: QR
+    description: Generator kode QR kamar
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Status kesehatan layanan
+      responses:
+        '200':
+          description: Layanan sehat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+
+  /api/chat:
+    post:
+      tags: [Chat]
+      summary: Kirim pesan chat ke asisten AI tamu
+      security:
+        - GuestToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+      responses:
+        '200':
+          description: Respons AI (teks, mungkin dengan tiket dibuat)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/chat/photo:
+    post:
+      tags: [Chat]
+      summary: Kirim foto (mis. kerusakan kamar) ke asisten AI
+      security:
+        - GuestToken: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+                  description: Gambar JPG/PNG/WebP maks 8MB
+                session_id:
+                  type: string
+                token:
+                  type: string
+                message:
+                  type: string
+                  description: Keterangan opsional
+      responses:
+        '200':
+          description: Respons AI dari foto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/conversations:
+    get:
+      tags: [Chat]
+      summary: Riwayat percakapan per sesi tamu
+      security:
+        - GuestToken: []
+        - StaffAuth: []
+      parameters:
+        - name: session_id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 50, maximum: 100 }
+      responses:
+        '200':
+          description: Daftar pesan chat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConversationMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/tickets:
+    post:
+      tags: [Tickets]
+      summary: Buat tiket permintaan layanan
+      security:
+        - GuestToken: []
+        - StaffAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCreateRequest'
+      responses:
+        '201':
+          description: Tiket berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags: [Tickets]
+      summary: Daftar tiket (dengan filter)
+      description: |
+        Staf melihat semua tiket. Tamu QR selalu dibatasi ke kamar mereka sendiri.
+      security:
+        - GuestToken: []
+        - StaffAuth: []
+      parameters:
+        - name: department
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/TicketStatus'
+        - name: priority
+          in: query
+          schema:
+            $ref: '#/components/schemas/Priority'
+        - name: room
+          in: query
+          schema: { type: string }
+        - name: room_number
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Daftar tiket
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tickets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Ticket'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/tickets/stats:
+    get:
+      tags: [Analytics]
+      summary: Statistik ringkas staf (staff only)
+      security:
+        - StaffAuth: []
+      responses:
+        '200':
+          description: Statistik operasional
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stats'
+
+  /api/tickets/{ticket_number}:
+    get:
+      tags: [Tickets]
+      summary: Detail satu tiket
+      security:
+        - GuestToken: []
+        - StaffAuth: []
+      parameters:
+        - name: ticket_number
+          in: path
+          required: true
+          schema:
+            type: string
+            example: TKT-000001
+      responses:
+        '200':
+          description: Detail tiket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tickets/{ticket_number}/status:
+    patch:
+      tags: [Tickets]
+      summary: Perbarui status tiket (staff only)
+      security:
+        - StaffAuth: []
+      parameters:
+        - name: ticket_number
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  $ref: '#/components/schemas/TicketStatus'
+      responses:
+        '200':
+          description: Status diperbarui
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticket_number: { type: string }
+                  status:
+                    $ref: '#/components/schemas/TicketStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tickets/{ticket_number}/priority:
+    patch:
+      tags: [Tickets]
+      summary: Perbarui prioritas tiket (staff only)
+      security:
+        - StaffAuth: []
+      parameters:
+        - name: ticket_number
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority:
+                  $ref: '#/components/schemas/Priority'
+      responses:
+        '200':
+          description: Prioritas diperbarui
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticket_number: { type: string }
+                  priority:
+                    $ref: '#/components/schemas/Priority'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tickets/{ticket_number}/assign:
+    post:
+      tags: [Tickets]
+      summary: Tugaskan tiket ke staf (staff only)
+      security:
+        - StaffAuth: []
+      parameters:
+        - name: ticket_number
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                staff_id:
+                  type: integer
+                staff_name:
+                  type: string
+                department:
+                  type: string
+      responses:
+        '201':
+          description: Penugasan dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticket_number: { type: string }
+                  staff_id: { type: integer }
+                  staff_name: { type: string }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tickets/{ticket_number}/assignments:
+    get:
+      tags: [Tickets]
+      summary: Daftar penugasan tiket
+      security:
+        - GuestToken: []
+        - StaffAuth: []
+      parameters:
+        - name: ticket_number
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Daftar penugasan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assignments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ticket_number: { type: string }
+                        staff_id: { type: integer }
+                        staff_name: { type: string }
+                        assigned_at: { type: string, format: date-time }
+
+  /api/analytics:
+    get:
+      tags: [Analytics]
+      summary: Analitik agregasi tiket (staff only, 7 hari)
+      security:
+        - StaffAuth: []
+      responses:
+        '200':
+          description: Data analitik
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analytics'
+
+  /api/staff/login:
+    post:
+      tags: [Staff]
+      summary: Login staf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  staff:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      name: { type: string }
+                      email: { type: string }
+                      department: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/staff/me:
+    get:
+      tags: [Staff]
+      summary: Profil staf saat ini
+      security:
+        - StaffAuth: []
+      responses:
+        '200':
+          description: Profil staf
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  name: { type: string }
+                  email: { type: string }
+                  department: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/staff/logout:
+    post:
+      tags: [Staff]
+      summary: Logout / cabut sesi staf
+      security:
+        - StaffAuth: []
+      responses:
+        '200':
+          description: Berhasil logout
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [logged out]
+
+  /api/guest/me:
+    get:
+      tags: [Guest]
+      summary: Nomor kamar tamu dari token QR terverifikasi
+      security:
+        - GuestToken: []
+      responses:
+        '200':
+          description: Nomor kamar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  room_number: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/hotel-info:
+    get:
+      tags: [Content]
+      summary: Informasi hotel (publik)
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Item info hotel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HotelInfo'
+
+  /api/recommendations:
+    get:
+      tags: [Content]
+      summary: Rekomendasi lokal Pekanbaru (publik)
+      parameters:
+        - name: category
+          in: query
+          schema:
+            enum: [restaurant, cafe, tourism, shopping, atm, transportation]
+        - name: max_price
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Rekomendasi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Recommendation'
+
+  /api/rooms/{room}/qr:
+    get:
+      tags: [QR]
+      summary: Hasilkan kode QR akses kamar (staff only)
+      security:
+        - StaffAuth: []
+      parameters:
+        - name: room
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Gambar PNG QR
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/events:
+    get:
+      tags: [Live]
+      summary: Server-Sent Events aliran status tiket (staff only)
+      security:
+        - StaffAuth: []
+      responses:
+        '200':
+          description: Aliran event tekstual (text/event-stream)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/docs:
+    get:
+      tags: [Docs]
+      summary: Spesifikasi OpenAPI ini
+      responses:
+        '200':
+          description: Dokumen OpenAPI YAML
+          content:
+            application/yaml:
+              schema: { type: string }
+
+components:
+  securitySchemes:
+    GuestToken:
+      type: apiKey
+      in: header
+      name: X-Guest-Token
+      description: Token QR bertanda HMAC dari /api/rooms/{room}/qr (bisa juga via query ?t=)
+    StaffAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Token sesi staf (dari /api/staff/login)
+
+  schemas:
+    ChatRequest:
+      type: object
+      required: [session_id, message]
+      properties:
+        session_id:
+          type: string
+          description: ID sesi klien
+        room_number:
+          type: string
+          description: Nomor kamar (token QR lebih berwenang)
+        message:
+          type: string
+          maxLength: 2000
+        token:
+          type: string
+          description: Opsional bila tidak di header/query
+
+    ChatResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        intent:
+          type: string
+          description: Klasifikasi intent AI
+        requires_ticket:
+          type: boolean
+        ticket_id:
+          type: string
+          nullable: true
+          description: Nomor tiket bila dibuat (mis. TKT-000001)
+
+    ConversationMessage:
+      type: object
+      properties:
+        id: { type: integer }
+        role:
+          type: string
+          enum: [user, assistant]
+        message: { type: string }
+        intent:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    TicketCreateRequest:
+      type: object
+      required: [room_number, department, category, description, priority]
+      properties:
+        room_number: { type: string }
+        department:
+          $ref: '#/components/schemas/Department'
+        category:
+          type: string
+          description: Intent/kategori valid (mis. TOWEL_REQUEST, AC_PROBLEM)
+        description:
+          type: string
+          maxLength: 500
+        priority:
+          $ref: '#/components/schemas/Priority'
+
+    TicketCreated:
+      type: object
+      properties:
+        ticket_number: { type: string }
+        room_number: { type: string }
+        department:
+          $ref: '#/components/schemas/Department'
+        category: { type: string }
+        priority:
+          $ref: '#/components/schemas/Priority'
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+
+    Ticket:
+      type: object
+      properties:
+        ticket_number: { type: string }
+        room_number: { type: string }
+        department:
+          $ref: '#/components/schemas/Department'
+        category: { type: string }
+        description: { type: string }
+        priority:
+          $ref: '#/components/schemas/Priority'
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TicketDetail:
+      allOf:
+        - $ref: '#/components/schemas/Ticket'
+        - type: object
+          properties:
+            resolved_at:
+              type: string
+              format: date-time
+              nullable: true
+
+    Stats:
+      type: object
+      properties:
+        total_open: { type: integer }
+        high_priority: { type: integer }
+        housekeeping: { type: integer }
+        engineering: { type: integer }
+        resolved_today: { type: integer }
+        total_tickets: { type: integer }
+
+    Analytics:
+      type: object
+      properties:
+        daily:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              created: { type: integer }
+              resolved: { type: integer }
+        avg_resolution_hours: { type: number, format: float }
+        active_by_department:
+          type: object
+          additionalProperties: { type: integer }
+        active_by_priority:
+          type: object
+          additionalProperties: { type: integer }
+        top_categories:
+          type: array
+          items:
+            type: object
+            properties:
+              category: { type: string }
+              count: { type: integer }
+        total_open: { type: integer }
+        total_tickets: { type: integer }
+
+    HotelInfo:
+      type: object
+      properties:
+        id: { type: integer }
+        category: { type: string }
+        title: { type: string }
+        content: { type: string }
+
+    Recommendation:
+      type: object
+      properties:
+        name: { type: string }
+        category:
+          type: string
+          enum: [restaurant, cafe, tourism, shopping, atm, transportation]
+        price_min:
+          type: integer
+          nullable: true
+        price_max:
+          type: integer
+          nullable: true
+        distance_km:
+          type: number
+          nullable: true
+        address:
+          type: string
+          nullable: true
+
+    Department:
+      type: string
+      enum: [HOUSEKEEPING, ENGINEERING, FRONT_OFFICE]
+
+    Priority:
+      type: string
+      enum: [LOW, MEDIUM, HIGH]
+
+    TicketStatus:
+      type: string
+      enum: [OPEN, IN_PROGRESS, RESOLVED, CANCELLED]
+
+  responses:
+    BadRequest:
+      description: Permintaan tidak valid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Autentikasi gagal / diperlukan
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Sumber daya tidak ditemukan
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }

@@ -25,8 +25,52 @@ func Migrate(ctx context.Context, db *mongo.Database) error {
 	if err := seedRecommendations(ctx, db); err != nil {
 		return fmt.Errorf("seed recommendations: %w", err)
 	}
+	if err := seedDynamicInfo(ctx, db); err != nil {
+		return fmt.Errorf("seed dynamic info: %w", err)
+	}
 	if err := seedStaff(ctx, db); err != nil {
 		return fmt.Errorf("seed staff: %w", err)
+	}
+	return nil
+}
+
+// seedDynamicInfo inserts events, daily menu, and weather-context entries into
+// hotel_information with categories EVENT, DAILY_MENU, and WEATHER. Idempotent
+// per unique Title so re-running migrate only adds missing rows (unlike the
+// count-based seedHotelInformation which skips once any rows exist).
+func seedDynamicInfo(ctx context.Context, db *mongo.Database) error {
+	col := db.Collection(hotelInfoCol)
+	now := time.Now()
+	type item struct{ Category, Title, Content string }
+	// Data event & menu bersifat contoh nyata Pekanbaru/BATIQA; perbarui berkala.
+	items := []item{
+		{"EVENT", "Upcoming Event: Kuliner Kulineran Riau", "Pekanbaru Culinary Festival pekan ini di SKA Mall (Jl. Tuanku Tambusai): aneka kuliner Melayu, live music, dan tenant UMKM. Jumat-Minggu, sore sampai malam."},
+		{"EVENT", "Upcoming Event: Laksamana Parade", "Event budaya di halaman Museum Sang Nila Utama Pekanbaru akhir pekan ini: pameran budaya Melayu, bazar, dan pertunjukan zapin."},
+		{"EVENT", "Upcoming Event: Hotel Weekend Live Jazz", "FRESQA Bistro menghadirkan live acoustic & jazz tiap Jumat & Sabtu malam mulai 19.00-22.00. Reservasi meja via Front Office."},
+		{"EVENT", "Upcoming Event: UMKM Pasar Rakyat", "Pasar rakyat tiap Minggu pagi di Anjungan Sungai Siak: produk lokal, kuliner khas Riau, dan area bermain anak."},
+		{"DAILY_MENU", "Today's Breakfast Menu", "Prasmanan sarapan hari ini: Nasi Uduk, Bubur Ayam, Omelet, Roti, Sereal, buah segar, kopi/teh. Buka 06.00-10.00 di FRESQA Bistro."},
+		{"DAILY_MENU", "Today's Lunch/Dinner Special", "Special hari ini di FRESQA Bistro: Gulai Ikan Patin, Ayam Panggang Madu, dan Sate Padang. A la carte mulai Rp45.000. Tersedia room service 24 jam."},
+		{"WEATHER", "Pekanbaru Climate Note", "Pekanbaru beriklim tropis panas-lembap (30-33°C siang). Musim hujan umumnya Nov-Mar; hujan sering datang sore-malam singkat. Selalu sedia payung di kamar."},
+	}
+	for _, it := range items {
+		var existing model.HotelInformation
+		err := col.FindOne(ctx, bson.M{"category": it.Category, "title": it.Title}).Decode(&existing)
+		switch {
+		case err == mongo.ErrNoDocuments:
+			id, err := nextID(ctx, db, hotelInfoCol)
+			if err != nil {
+				return err
+			}
+			if _, err := col.InsertOne(ctx, model.HotelInformation{
+				ID: id, Category: it.Category, Title: it.Title, Content: it.Content,
+				Active: true, CreatedAt: now, UpdatedAt: now,
+			}); err != nil {
+				return err
+			}
+			log.Printf("  seeded dynamic info [%s] %s", it.Category, it.Title)
+		case err != nil:
+			return err
+		}
 	}
 	return nil
 }
@@ -61,6 +105,10 @@ func ensureIndexes(ctx context.Context, db *mongo.Database) error {
 		assignmentsCol: {
 			mongo.IndexModel{Keys: bson.D{{Key: "ticket_id", Value: 1}, {Key: "staff_id", Value: 1}}, Options: options.Index().SetUnique(true)},
 		},
+		staffSessionsCol: {
+			// TTL: Mongo auto-deletes expired sessions
+			mongo.IndexModel{Keys: bson.M{"expires_at": 1}, Options: options.Index().SetExpireAfterSeconds(0)},
+		},
 	}
 	for col, models := range indexes {
 		if _, err := db.Collection(col).Indexes().CreateMany(ctx, models); err != nil {
@@ -87,19 +135,24 @@ func seedHotelInformation(ctx context.Context, db *mongo.Database) error {
 		Title    string
 		Content  string
 	}
+	// Data riil Hotel BATIQA Pekanbaru dari docs/BATIQA_REAL_WORLD_AUDIT.md
+	// (sumber publik resmi; verifikasi berkala sebelum dipakai produksi).
 	items := []item{
-		{"BREAKFAST", "Breakfast Schedule", "Breakfast tersedia mulai pukul 06:00 sampai 10:00 di restaurant lantai 1."},
-		{"BREAKFAST", "Breakfast Location", "Restaurant BATIQA di lantai 1, dekat lobby."},
-		{"WIFI", "Hotel WiFi", "Connect to BATIQA HOTELS network. Password tersedia di kartu kamar atau hubungi Front Office."},
-		{"WIFI", "WiFi Support", "Jika WiFi bermasalah, silakan laporkan via AI Assistant atau hubungi Front Office ext 0."},
-		{"POOL", "Swimming Pool", "Kolam renang buka 06:00-20:00 di lantai 2. Tersedia handuk pool di pool bar."},
-		{"GYM", "Gym / Fitness Center", "Gym buka 24 jam di lantai 2. Akses dengan kartu kamar."},
-		{"CHECKIN", "Check-in Time", "Check-in mulai pukul 14:00. Early check-in tergantung ketersediaan."},
-		{"CHECKOUT", "Check-out Time", "Check-out pukul 12:00. Late check-out dapat diminta ke Front Office."},
-		{"RESTAURANT", "Hotel Restaurant", "Restaurant buka 06:00-22:00 menyajikan masakan Indonesia & Western."},
-		{"ROOM", "Room Facilities", "Fasilitas kamar: AC, TV, WiFi, shower, amenities, brankas, minibar."},
-		{"POLICY", "Smoking Policy", "Hotel bebas asap rokok di dalam kamar. Area merokok tersedia di luar lobby."},
-		{"POLICY", "Pet Policy", "Hewan peliharaan tidak diperbolehkan di kamar."},
+		{"BREAKFAST", "Breakfast Schedule", "Sarapan prasmanan tersedia setiap hari pukul 06.00-10.00 di FRESQA Bistro lantai 1 (sesuai paket menginap)."},
+		{"BREAKFAST", "Breakfast Location", "FRESQA Bistro berada di lantai 1, beberapa langkah dari lobby."},
+		{"WIFI", "Hotel WiFi", "Terhubung ke jaringan WiFi BATIQA. Password tertera pada kartu kamar Anda, atau tanyakan ke Front Office."},
+		{"WIFI", "WiFi Support", "Jika WiFi bermasalah, laporkan lewat asisten AI ini atau hubungi Front Office ext 0 - tim Engineering akan menindaklanjuti."},
+		{"POOL", "Swimming Pool", "Kolam renang buka pukul 07.00-19.00. Handuk kolam tersedia di pool bar."},
+		{"GYM", "Gym / Fitness Center", "Fitness center berada di lantai 2, buka setiap hari pukul 06.00-22.00. Akses dengan kartu kamar."},
+		{"CHECKIN", "Check-in Time", "Check-in dimulai pukul 14.00. Early check-in bergantung ketersediaan kamar - silakan minta bantuan Front Office."},
+		{"CHECKOUT", "Check-out Time", "Check-out paling lambat pukul 12.00. Late check-out dapat diminta melalui Front Office (biaya dapat berlaku)."},
+		{"RESTAURANT", "Hotel Restaurant", "FRESQA Bistro menyajikan menu Indonesia & Western setiap hari pukul 06.00-23.00. Room service tersedia 24 jam."},
+		{"ROOM", "Room Facilities", "Setiap kamar dilengkapi AC, TV, WiFi, shower air hangat, amenities, brankas, dan meja kerja."},
+		{"ROOM", "Mushalla", "Mushalla hotel berada di lantai 2, muat sekitar 20 jamaah. Mukena & sajadah tersedia di mushalla."},
+		{"ROOM", "Parking & EV", "Parkir mobil gratis untuk tamu, termasuk stasiun pengisian kendaraan listrik (EV) di area parkir depan."},
+		{"POLICY", "Smoking Policy", "Seluruh ruangan dalam kamar bebas asap rokok. Area merokok tersedia di luar lobby."},
+		{"POLICY", "Airport Shuttle", "Shuttle bandara gratis tersedia 24 jam menuju Bandara Sultan Syarif Kasim II (sekitar 15-20 menit perjalanan). Reservasi melalui Front Office."},
+		{"POLICY", "Pet Policy", "Mohon maaf, hewan peliharaan tidak diperbolehkan menginap di dalam kamar."},
 	}
 	docs := make([]interface{}, 0, len(items))
 	for _, it := range items {
@@ -138,13 +191,25 @@ func seedRecommendations(ctx context.Context, db *mongo.Database) error {
 		pMin, pMax           *int
 		dist                 *float64
 		addr                 string
+		maps                 string
 	}
+	// Tempat nyata sekitar Jl. Jend. Sudirman / Simpang Tiga, Pekanbaru.
+	// Harga bersifat estimasi publik - tandai untuk verifikasi berkala.
+	// maps_link adalah URL pra-isi Google Maps (query) sehingga tamu bisa
+	// langsung membuka navigasi dari HP.
 	items := []rec{
-		{"Warung Sederhana BATIQA", "restaurant", "Masakan Indonesia, budget-friendly dekat hotel", intPtr(25000), intPtr(75000), f64Ptr(0.5), "Jl. Contoh No.1"},
-		{"Cafe Ceria", "cafe", "Kopi & pastry, cocok untuk meeting santai", intPtr(20000), intPtr(50000), f64Ptr(0.8), "Jl. Contoh No.2"},
-		{"Mall Central", "shopping", "Pusat perbelanjaan terbesar sekitar hotel", intPtr(0), intPtr(0), f64Ptr(1.2), "Jl. Mall No.10"},
-		{"Pantai Indah", "tourism", "Destinasi wisata pantai dekat hotel", intPtr(0), intPtr(30000), f64Ptr(3.5), "Jl. Pantai No.5"},
-		{"ATM BCA Terdekat", "atm", "ATM 24 jam 200m dari lobby", intPtr(0), intPtr(0), f64Ptr(0.2), "Lobby BATIQA"},
+		{"FRESQA Bistro - BATIQA", "restaurant", "Bistro hotel sendiri: Indonesia & Western, buka 06.00-23.00", intPtr(35000), intPtr(150000), f64Ptr(0.0), "Lantai 1, Hotel BATIQA Pekanbaru", "https://www.google.com/maps/search/?api=1&query=Hotel+BATIQA+Pekanbaru"},
+		{"RM Selera Kampung", "restaurant", "Masakan Melayu-Riau legendaris, asam pedas & gulai", intPtr(25000), intPtr(80000), f64Ptr(1.8), "Jl. Diponegoro, Pekanbaru", "https://www.google.com/maps/search/?api=1&query=RM+Selera+Kampung+Pekanbaru"},
+		{"Pondok Patin H. Guntur", "restaurant", "Ikan patin bakar & gulai patin khas Riau, porsi besar", intPtr(50000), intPtr(200000), f64Ptr(4.0), "Jl. Soekarno-Hatta, Pekanbaru", "https://www.google.com/maps/search/?api=1&query=Pondok+Patin+H.+Guntur+Pekanbaru"},
+		{"Sapadia Coffee & Eatery", "cafe", "Kafe nyaman dengan kopi specialty & western food", intPtr(25000), intPtr(90000), f64Ptr(2.0), "Jl. Jend. Sudirman, Pekanbaru", "https://www.google.com/maps/search/?api=1&query=Sapadia+Coffee+Pekanbaru"},
+		{"Kopi Koe Pekanbaru", "cafe", "Kopi lokal & suasana santai, cocok untuk bekerja", intPtr(15000), intPtr(50000), f64Ptr(3.1), "Jl. Ahmad Yani, Pekanbaru", "https://www.google.com/maps/search/?api=1&query=Kopi+Koe+Pekanbaru"},
+		{"SKA Mall", "shopping", "Mal terbesar di Pekanbaru: bioskop, tenant fashion & kuliner", intPtr(0), intPtr(0), f64Ptr(2.5), "Jl. Tuanku Tambusai, Pekanbaru", "https://www.google.com/maps/search/?api=1&query=SKA+Mall+Pekanbaru"},
+		{"Ciputra Seraya Mall", "shopping", "Mal modern dengan supermarket, food court & entertainment", intPtr(0), intPtr(0), f64Ptr(3.8), "Jl. Laksamana, Pekanbaru", "https://www.google.com/maps/search/?api=1&query=Ciputra+Seraya+Mall+Pekanbaru"},
+		{"Anjungan Sungai Siak", "tourism", "Waterfront ikonik untuk jogging & sunset di tepi Siak", intPtr(0), intPtr(0), f64Ptr(2.2), "Jl. Raja Ali Haji, Pekanbaru", "https://www.google.com/maps/search/?api=1&query=Anjungan+Sungai+Siak+Pekanbaru"},
+		{"Masjid Raya An-Nur", "tourism", "Masjid megah arsitektur Melayu, destinasi wisata religi", intPtr(0), intPtr(0), f64Ptr(1.6), "Jl. Ahmad Yani, Pekanbaru", "https://www.google.com/maps/search/?api=1&query=Masjid+Raya+An-Nur+Pekanbaru"},
+		{"Taman Wisata Alam Mayang", "tourism", "Rekreasi keluarga: rekreasi air, kebun binatang mini & taman", intPtr(25000), intPtr(50000), f64Ptr(5.5), "Jl. Kaharuddin Nasution, Pekanbaru", "https://www.google.com/maps/search/?api=1&query=Taman+Wisata+Alam+Mayang+Pekanbaru"},
+		{"ATM BCA Terdekat", "atm", "ATM 24 jam di lobby hotel", intPtr(0), intPtr(0), f64Ptr(0.1), "Lobby BATIQA Pekanbaru", "https://www.google.com/maps/search/?api=1&query=ATM+BCA+Hotel+BATIQA+Pekanbaru"},
+		{"Airport Shuttle - SSK II", "transportation", "Shuttle gratis 24 jam ke Bandara Sultan Syarif Kasim II (~15-20 menit)", intPtr(0), intPtr(0), f64Ptr(1.9), "Reservasi via Front Office", "https://www.google.com/maps/search/?api=1&query=Sultan+Syarif+Kasim+II+Airport"},
 	}
 	docs := make([]interface{}, 0, len(items))
 	for _, it := range items {
@@ -159,7 +224,7 @@ func seedRecommendations(ctx context.Context, db *mongo.Database) error {
 		docs = append(docs, model.Recommendation{
 			ID: id, Name: it.name, Category: it.category, Description: strPtr(it.desc),
 			PriceMin: it.pMin, PriceMax: pMax, DistanceKm: it.dist, Address: strPtr(it.addr),
-			Active: true, CreatedAt: now,
+			MapsLink: strPtr(it.maps), Active: true, CreatedAt: now,
 		})
 	}
 	if _, err := col.InsertMany(ctx, docs); err != nil {

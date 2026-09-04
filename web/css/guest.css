@@ -1087,12 +1087,12 @@ section[id] { scroll-margin-top: 92px; }
 
 .chat__input {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-end;
   background: var(--bg);
   border: 1px solid var(--border-strong);
   border-radius: 26px;
-  padding: 8px 8px 8px 20px;
+  padding: 7px 8px 7px 10px;
   transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 .chat__input:focus-within {
@@ -1176,6 +1176,83 @@ section[id] { scroll-margin-top: 92px; }
 }
 .mt-16 { margin-top: 16px; }
 .mb-16 { margin-bottom: 16px; }
+
+/* ============================================================
+   CHAT — Photo-to-Ticket (lampirkan foto kerusakan)
+   ============================================================ */
+.chat__attach {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.chat__attach svg { width: 20px; height: 20px; }
+.chat__attach:hover { background: rgba(3, 60, 90, 0.08); color: var(--navy); }
+.chat__attach:active { transform: scale(0.94); }
+.chat__attach:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.photo-preview {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  animation: bubble-rise 200ms ease-out;
+}
+.photo-preview__thumb {
+  position: relative;
+  flex-shrink: 0;
+}
+.photo-preview img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-sm);
+  background: var(--bg);
+}
+.photo-preview__remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #FFFFFF;
+  border: 2px solid var(--card);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--t-fast);
+}
+.photo-preview__remove:hover { background: var(--error); }
+.photo-preview__remove svg { width: 10px; height: 10px; }
+.photo-preview__caption {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.photo-preview__caption strong {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--navy);
+  font-weight: 600;
+}
 
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {

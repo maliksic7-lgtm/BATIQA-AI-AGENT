@@ -84,16 +84,18 @@ func (s *Service) Process(ctx context.Context, req Request) (result *AIResult, e
 	// Create context with timeout if not set (LLM latency + retry backoff needs headroom)
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 20*time.Second)
+		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
 
 	// Try primary provider
 	raw, err := s.primary.Generate(ctx, req)
 	if err != nil {
-		// Fallback to mock provider (controlled error, don't crash)
-		// Log fallback internally (caller can log)
-		fallbackRaw, fallbackErr := s.fallback.Generate(ctx, req)
+		// Fallback MUST NOT inherit a nearly-expired context: give the rule-based
+		// provider its own fresh budget so guests always get a controlled answer.
+		fbCtx, fbCancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer fbCancel()
+		fallbackRaw, fallbackErr := s.fallback.Generate(fbCtx, req)
 		if fallbackErr != nil {
 			// Even fallback failed -> return safe UNKNOWN
 			return fallbackResult(req, langFromReq(req)), fmt.Errorf("primary %s failed: %v; fallback also failed: %v", s.primary.Name(), err, fallbackErr)
@@ -110,7 +112,9 @@ func (s *Service) Process(ctx context.Context, req Request) (result *AIResult, e
 	validated, err := Validate(raw, req.RoomNumber)
 	if err != nil {
 		// Invalid AI output (malformed, invented room, etc.) -> fallback to mock logic
-		fallbackRaw, fallbackErr := s.fallback.Generate(ctx, req)
+		fbCtx, fbCancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer fbCancel()
+		fallbackRaw, fallbackErr := s.fallback.Generate(fbCtx, req)
 		if fallbackErr != nil {
 			return fallbackResult(req, LangID), fmt.Errorf("validation failed: %v; fallback failed: %v", err, fallbackErr)
 		}
@@ -141,6 +145,63 @@ func fallbackResult(req Request, lang string) *AIResult {
 		resp = "Sorry, AI service is temporarily unavailable. Please try again shortly."
 	}
 	// Per ERROR FLOW.md: fallback response, do not create ticket
+	return &AIResult{
+		Intent:   IntentUnknown,
+		Language: lang,
+		Entities: map[string]interface{}{},
+		Action:   Action{Type: ActionClarify},
+		Response: resp,
+	}
+}
+
+// ProcessImage handles photo input (guest photos of room problems).
+// Uses the primary provider's multimodal capability when available; the
+// rule-based fallback answers with a controlled clarify response.
+func (s *Service) ProcessImage(ctx context.Context, req Request, image []byte, mimeType string) (result *AIResult, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = fallbackResult(req, langFromReq(req))
+			err = fmt.Errorf("recovered from panic in AI vision: %v", r)
+		}
+	}()
+
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 35*time.Second)
+		defer cancel()
+	}
+
+	if gp, ok := s.primary.(*GeminiProvider); ok {
+		raw, gerr := gp.GenerateWithImage(ctx, req, image, mimeType)
+		if gerr == nil {
+			if validated, verr := Validate(raw, req.RoomNumber); verr == nil {
+				return validated, nil
+			} else {
+				err = fmt.Errorf("vision validation failed: %v", verr)
+			}
+		} else {
+			err = gerr
+		}
+	}
+
+	// Fallback: rule-based provider cannot see images; fresh ctx in case the
+	// primary burned its entire budget.
+	fbCtx, fbCancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer fbCancel()
+	res, ferr := s.fallback.Generate(fbCtx, req)
+	if ferr == nil {
+		if v, verr := Validate(res, req.RoomNumber); verr == nil {
+			return v, err
+		}
+	}
+	return fallbackClarifyForImage(langFromReq(req)), err
+}
+
+func fallbackClarifyForImage(lang string) *AIResult {
+	resp := "Maaf, saya belum bisa menganalisis foto ini. Bisakah Anda jelaskan masalahnya dengan teks?"
+	if lang == LangEN {
+		resp = "Sorry, I couldn't analyze this photo. Could you describe the issue in text instead?"
+	}
 	return &AIResult{
 		Intent:   IntentUnknown,
 		Language: lang,

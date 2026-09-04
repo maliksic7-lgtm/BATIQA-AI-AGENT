@@ -8,6 +8,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 
+	"batiqa-ai/internal/events"
 	"batiqa-ai/internal/handler"
 	"batiqa-ai/internal/repository"
 	"batiqa-ai/internal/service/ai"
@@ -19,9 +20,10 @@ import (
 func New() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", handler.HealthCheck)
+	mux.Handle("/api/docs/", handler.NewOpenAPIHandler())
 
 	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/health" {
+		if r.URL.Path == "/api/health" || strings.HasPrefix(r.URL.Path, "/api/docs/") {
 			mux.ServeHTTP(w, r)
 			return
 		}
@@ -47,6 +49,9 @@ func NewWithDB(db *mongo.Database) http.Handler {
 	// Health
 	mux.HandleFunc("/api/health", handler.HealthCheck)
 
+	// OpenAPI / Swagger UI (works even without DB)
+	mux.Handle("/api/docs/", handler.NewOpenAPIHandler())
+
 	if db != nil {
 		// Repositories
 		ticketRepo := repository.NewTicketRepository(db)
@@ -54,45 +59,68 @@ func NewWithDB(db *mongo.Database) http.Handler {
 		convRepo := repository.NewConversationRepository(db)
 		hotelRepo := repository.NewHotelInfoRepository(db)
 		recRepo := repository.NewRecommendationRepository(db)
+		sessionRepo := repository.NewStaffSessionRepository(db)
 
 		// Services
+		broker := events.New()
 		aiSvc := ai.NewService()
 		ticketSvc := ticketservice.NewService(ticketRepo, guestRepo)
+		ticketSvc.SetBroker(broker)
+
+		// Guests may only open their own tickets: DB-backed ownership check.
+		handler.SetTicketOwnershipChecker(func(r *http.Request, ticketNumber, room string) bool {
+			t, err := ticketSvc.GetByTicketNumber(ticketNumber)
+			return err == nil && t != nil && strings.EqualFold(t.RoomNumber, room)
+		})
 
 		// Handlers
 		ticketHandler := handler.NewTicketHandler(ticketSvc)
 		chatHandler := handler.NewChatHandlerFull(aiSvc, ticketSvc, convRepo, guestRepo, hotelRepo, recRepo)
 		hotelHandler := handler.NewHotelHandler(hotelRepo)
 		recHandler := handler.NewRecommendationHandler(recRepo)
-		staffAuthHandler := handler.NewStaffAuthHandler(repository.NewStaffRepository(db))
+		staffAuthHandler := handler.NewStaffAuthHandler(repository.NewStaffRepository(db), sessionRepo)
 		statsHandler := handler.NewStatsHandler(ticketRepo)
 		staffRepo := repository.NewStaffRepository(db)
 		assignHandler := handler.NewAssignHandler(ticketSvc, staffRepo, repository.NewAssignmentRepository(db))
 		convHandler := handler.NewConversationHandler(convRepo)
+		qrHandler := handler.NewQRHandler(staffAuthHandler)
+		sseHandler := handler.NewSSEHandler(staffAuthHandler, broker)
+		analyticsHandler := handler.NewAnalyticsHandler(ticketRepo)
 
 		// Staff auth: POST /api/staff/login (public), GET /api/staff/me, POST /api/staff/logout (auth)
 		mux.HandleFunc("/api/staff/login", staffAuthHandler.Login)
-		mux.Handle("/api/staff/me", handler.AuthMiddleware(http.HandlerFunc(staffAuthHandler.Me)))
-		mux.Handle("/api/staff/logout", handler.AuthMiddleware(http.HandlerFunc(staffAuthHandler.Logout)))
+		mux.Handle("/api/staff/me", staffAuthHandler.AuthMiddleware(http.HandlerFunc(staffAuthHandler.Me)))
+		mux.Handle("/api/staff/logout", staffAuthHandler.AuthMiddleware(http.HandlerFunc(staffAuthHandler.Logout)))
 
 		// Stats: GET /api/tickets/stats (staff only)
-		mux.Handle("/api/tickets/stats", handler.AuthMiddleware(http.HandlerFunc(statsHandler.ServeHTTP)))
+		mux.Handle("/api/tickets/stats", staffAuthHandler.AuthMiddleware(http.HandlerFunc(statsHandler.ServeHTTP)))
 
-		// Chat: POST /api/chat
-		mux.HandleFunc("/api/chat", chatHandler.ServeHTTP)
+		// Live updates: GET /api/events (staff, SSE)
+		mux.Handle("/api/events", http.HandlerFunc(sseHandler.ServeHTTP))
 
-		// Chat history: GET /api/conversations?session_id=
-		mux.HandleFunc("/api/conversations", convHandler.ServeHTTP)
+		// QR room codes: GET /api/rooms/{room}/qr (staff only)
+		mux.Handle("/api/rooms/", staffAuthHandler.AuthMiddleware(http.HandlerFunc(qrHandler.ServeHTTP)))
 
-		// Hotel info: GET /api/hotel-info
+		// Analytics: GET /api/analytics (staff only)
+		mux.Handle("/api/analytics", staffAuthHandler.AuthMiddleware(http.HandlerFunc(analyticsHandler.ServeHTTP)))
+
+		// Guest identity from QR token: GET /api/guest/me
+		mux.Handle("/api/guest/me", handler.GuestAuthMiddleware(http.HandlerFunc(chatHandler.GuestMe)))
+
+		// Chat text + photo: guests must present a valid QR token
+		mux.Handle("/api/chat/photo", handler.GuestAuthMiddleware(http.HandlerFunc(chatHandler.Photo)))
+		mux.Handle("/api/chat", handler.GuestAuthMiddleware(http.HandlerFunc(chatHandler.ServeHTTP)))
+
+		// Chat history per session (guest or staff)
+		mux.Handle("/api/conversations", staffAuthHandler.EitherAuth(http.HandlerFunc(convHandler.ServeHTTP)))
+
+		// Hotel info & recommendations stay public (non-guest-specific data)
 		mux.HandleFunc("/api/hotel-info", hotelHandler.ServeHTTP)
 		mux.HandleFunc("/api/hotel_info", hotelHandler.ServeHTTP)
-
-		// Recommendations: GET /api/recommendations
 		mux.HandleFunc("/api/recommendations", recHandler.ServeHTTP)
 
-		// Tickets: POST /api/tickets, GET /api/tickets
-		mux.HandleFunc("/api/tickets", func(w http.ResponseWriter, r *http.Request) {
+		// Tickets: POST /api/tickets, GET /api/tickets — staff OR scoped guest
+		mux.Handle("/api/tickets", staffAuthHandler.EitherAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodPost:
 				ticketHandler.Create(w, r)
@@ -101,7 +129,7 @@ func NewWithDB(db *mongo.Database) http.Handler {
 			default:
 				handler.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed")
 			}
-		})
+		})))
 
 		// Tickets detail and sub-resources: /api/tickets/{id}, /{id}/status (auth),
 		// /{id}/priority (auth), /{id}/assign + /{id}/assignments (auth for POST)
@@ -109,18 +137,19 @@ func NewWithDB(db *mongo.Database) http.Handler {
 			path := r.URL.Path
 			switch {
 			case strings.HasSuffix(path, "/status"):
-				// Require staff auth for status update
-				handler.AuthMiddleware(http.HandlerFunc(ticketHandler.UpdateStatus)).ServeHTTP(w, r)
+				staffAuthHandler.AuthMiddleware(http.HandlerFunc(ticketHandler.UpdateStatus)).ServeHTTP(w, r)
 			case strings.HasSuffix(path, "/priority"):
-				// Require staff auth for priority update per USER ROLES.md
-				handler.AuthMiddleware(http.HandlerFunc(ticketHandler.UpdatePriority)).ServeHTTP(w, r)
-			case strings.HasSuffix(path, "/assign") || strings.HasSuffix(path, "/assignments"):
-				if r.Method == http.MethodPost || r.Method == http.MethodDelete {
-					handler.AuthMiddleware(http.HandlerFunc(assignHandler.ServeHTTP)).ServeHTTP(w, r)
+				staffAuthHandler.AuthMiddleware(http.HandlerFunc(ticketHandler.UpdatePriority)).ServeHTTP(w, r)
+			case strings.HasSuffix(path, "/assign") && r.Method == http.MethodPost:
+				staffAuthHandler.AuthMiddleware(http.HandlerFunc(assignHandler.ServeHTTP)).ServeHTTP(w, r)
+			case strings.HasSuffix(path, "/assignments") || strings.HasSuffix(path, "/assign"):
+				staffAuthHandler.EitherAuth(http.HandlerFunc(assignHandler.ServeHTTP)).ServeHTTP(w, r)
+			case r.Method == http.MethodGet:
+				// Guests may only read their own room's tickets; staff any.
+				if handler.GuestRoom(r) != "" {
+					handler.GuestScopedDetail(http.HandlerFunc(ticketHandler.GetDetail)).ServeHTTP(w, r)
 					return
 				}
-				assignHandler.ServeHTTP(w, r)
-			case r.Method == http.MethodGet:
 				ticketHandler.GetDetail(w, r)
 			default:
 				handler.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed")
@@ -135,11 +164,14 @@ func NewWithDB(db *mongo.Database) http.Handler {
 			"/api/health", "/api/chat", "/api/conversations", "/api/tickets",
 			"/api/hotel-info", "/api/hotel_info", "/api/recommendations",
 			"/api/staff/login", "/api/staff/me", "/api/staff/logout",
+			"/api/guest/me", "/api/rooms/", "/api/events", "/api/analytics",
+			"/api/docs",
 		}
 		for _, p := range apiPrefixes {
-			if r.URL.Path == p || strings.HasPrefix(r.URL.Path, p+"/") {
+			base := strings.TrimSuffix(p, "/")
+			if r.URL.Path == base || strings.HasPrefix(r.URL.Path, base+"/") {
 				// DB required for all except health
-				if db == nil && p != "/api/health" {
+				if db == nil && p != "/api/health" && p != "/api/docs" {
 					handler.WriteError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Database not available")
 					return
 				}

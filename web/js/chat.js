@@ -10,9 +10,34 @@
   const suggestions = document.getElementById('suggestions');
   const roomLabel = document.getElementById('roomLabel');
 
-  const room = getRoom();
+  // Photo upload elements
+  const photoBtn = document.getElementById('photoBtn');
+  const photoInput = document.getElementById('photoInput');
+  const photoPreview = document.getElementById('photoPreview');
+  const photoPreviewImg = document.getElementById('photoPreviewImg');
+  const photoPreviewName = document.getElementById('photoPreviewName');
+  const photoRemove = document.getElementById('photoRemove');
+
+  const MAX_PHOTO_SIZE = 8 * 1024 * 1024; // 8MB
+  let pendingFile = null;
+  let pendingThumbURL = null;
+
+  let room = getRoom();
   const session = getSession();
   if(room) roomLabel.textContent = 'Room ' + room;
+
+  // Identitas kamar via guest token QR (fallback bila ?room tidak ada)
+  if(!room && typeof API.getGuestMe === 'function'){
+    API.getGuestMe()
+      .then(me => {
+        if(me && me.room_number){
+          room = me.room_number;
+          setRoom(room);
+          roomLabel.textContent = 'Room ' + room;
+        }
+      })
+      .catch(()=>{ /* token invalid / offline - chat tetap jalan */ });
+  }
 
   // Quick param ?quick=towel
   const params = new URLSearchParams(location.search);
@@ -59,6 +84,7 @@
   function setLoading(v){
     loading.style.display = v ? 'flex' : 'none';
     document.getElementById('sendBtn').disabled = v;
+    if(photoBtn) photoBtn.disabled = v;
   }
   function showError(msg){
     errorText.textContent = msg;
@@ -66,8 +92,33 @@
   }
   function hideError(){ errorBar.style.display='none'; }
 
+  // Pesan ramah untuk sesi/token invalid - jangan crash
+  function friendlyError(e){
+    if(e && (e.status === 401 || e.status === 403)){
+      return 'Sesi tidak valid. Silakan scan ulang QR di kamar Anda.';
+    }
+    return (e && e.message) || 'Terjadi kesalahan. Silakan coba lagi.';
+  }
+
+  // Response {message,intent,requires_ticket,ticket_id} -> bubble AI + kartu tiket
+  async function handleChatResponse(res){
+    let ticket = null;
+    if(res.ticket_id){
+      try{
+        ticket = await API.getTicket(res.ticket_id);
+      }catch(e){
+        ticket = { ticket_number: res.ticket_id, room_number: room, department: '', priority: '' };
+      }
+    }
+    addBubble(res.message, 'ai', ticket, res.intent);
+  }
+
   async function sendMessage(text){
     const msg = (text || input.value).trim();
+    if(pendingFile){
+      await sendPhoto(msg);
+      return;
+    }
     if(!msg) return;
     lastMessage = msg;
     hideError();
@@ -78,27 +129,78 @@
 
     try{
       const res = await API.chat(session, room, msg);
-      // res: {message, intent, requires_ticket, ticket_id}
-      let ticket = null;
-      if(res.ticket_id){
-        // Fetch ticket detail for display
-        try{
-          const detail = await API.getTicket(res.ticket_id);
-          ticket = detail;
-        }catch(e){
-          ticket = { ticket_number: res.ticket_id, room_number: room, department: '', priority: '' };
-        }
-      } else if(res.requires_ticket && !res.ticket_id){
-        // Missing room case - AI asked for room
-        ticket = null;
-      }
-      addBubble(res.message, 'ai', ticket, res.intent);
+      await handleChatResponse(res);
     }catch(e){
       // Fallback per AI failure - chat not broken
       console.error(e);
-      showError(e.message || 'Failed to send. Please try again.');
+      showError(friendlyError(e));
       // Still show fallback bubble so chat not broken
       const fallback = room ? 'Maaf, layanan AI sedang mengalami gangguan. Silakan coba lagi.' : 'Maaf, layanan AI sedang gangguan. Boleh saya tahu nomor kamar Anda?';
+      addBubble(fallback, 'ai');
+    }finally{
+      setLoading(false);
+      input.focus();
+    }
+  }
+
+  // ---------- Photo-to-Ticket ----------
+  function clearPendingPhoto(){
+    pendingFile = null;
+    if(pendingThumbURL){ URL.revokeObjectURL(pendingThumbURL); pendingThumbURL = null; }
+    photoInput.value = '';
+    if(photoPreview) photoPreview.style.display = 'none';
+    if(photoPreviewImg) photoPreviewImg.removeAttribute('src');
+  }
+
+  if(photoBtn && photoInput){
+    photoBtn.addEventListener('click', ()=>{ if(!pendingFile) photoInput.click(); });
+    photoInput.addEventListener('change', ()=>{
+      const f = photoInput.files && photoInput.files[0];
+      if(!f) return;
+      if(f.size > MAX_PHOTO_SIZE){
+        showError('Ukuran foto maksimal 8MB.');
+        clearPendingPhoto();
+        return;
+      }
+      if(f.type && !/^image\/(jpeg|jpg|png|webp)$/i.test(f.type)){
+        showError('Format foto harus JPG, PNG, atau WebP.');
+        clearPendingPhoto();
+        return;
+      }
+      pendingFile = f;
+      if(photoPreviewImg){
+        pendingThumbURL = URL.createObjectURL(f);
+        photoPreviewImg.src = pendingThumbURL;
+      }
+      if(photoPreviewName) photoPreviewName.textContent = f.name || 'Foto kerusakan';
+      if(photoPreview) photoPreview.style.display = 'flex';
+      hideError();
+      input.focus();
+    });
+    if(photoRemove){
+      photoRemove.addEventListener('click', ()=>{
+        clearPendingPhoto();
+        input.focus();
+      });
+    }
+  }
+
+  async function sendPhoto(caption){
+    if(!pendingFile) return;
+    lastMessage = caption || '';
+    hideError();
+    addBubble('[\u{1F4F7} Foto dikirim]' + (caption ? '\n' + caption : ''), 'user');
+    setLoading(true);
+    const file = pendingFile;
+    try{
+      const res = await API.chatPhoto(file, session, caption || '');
+      await handleChatResponse(res);
+      clearPendingPhoto();
+    }catch(e){
+      console.error(e);
+      showError(friendlyError(e));
+      // Preview dipertahankan agar tamu bisa kirim ulang
+      const fallback = room ? 'Maaf, foto gagal diproses. Silakan coba lagi.' : 'Maaf, layanan AI sedang gangguan. Boleh saya tahu nomor kamar Anda?';
       addBubble(fallback, 'ai');
     }finally{
       setLoading(false);
@@ -137,7 +239,9 @@
   (async function restoreHistory(){
     if(!session) return;
     try{
-      const res = await fetch('/api/conversations?session_id=' + encodeURIComponent(session) + '&limit=50');
+      const t = getToken();
+      const url = '/api/conversations?session_id=' + encodeURIComponent(session) + '&limit=50' + (t ? '&t=' + encodeURIComponent(t) : '');
+      const res = await fetch(url);
       if(!res.ok) return;
       const data = await res.json();
       const msgs = data.messages || [];
