@@ -35,10 +35,15 @@ func (h *AnalyticsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type InfographicsHandler struct {
 	tickets  *repository.TicketRepository
 	convRepo *repository.ConversationRepository
+	orders   *repository.RestaurantOrderRepository
 }
 
 func NewInfographicsHandler(ticketRepo *repository.TicketRepository, convRepo *repository.ConversationRepository) *InfographicsHandler {
 	return &InfographicsHandler{tickets: ticketRepo, convRepo: convRepo}
+}
+
+func NewInfographicsHandlerFull(ticketRepo *repository.TicketRepository, convRepo *repository.ConversationRepository, orders *repository.RestaurantOrderRepository) *InfographicsHandler {
+	return &InfographicsHandler{tickets: ticketRepo, convRepo: convRepo, orders: orders}
 }
 
 func (h *InfographicsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +63,18 @@ func (h *InfographicsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 				ig.TopAsked = append(ig.TopAsked, repository.CategoryCount{Category: in.Intent, Count: in.Count})
 			}
 		}
+	}
+	// Prefer real placed orders for "most ordered"; fall back to chat mentions
+	// when the restaurant_orders store is empty or unavailable.
+	if h.orders != nil {
+		ordered, oerr := h.orders.TopOrderedItems(5)
+		if oerr == nil && len(ordered) > 0 {
+			for _, c := range ordered {
+				ig.TopOrdered = append(ig.TopOrdered, c)
+			}
+		}
+	}
+	if len(ig.TopOrdered) == 0 && h.convRepo != nil {
 		ordered, oerr := h.convRepo.TopOrderedItems(5)
 		if oerr == nil {
 			for _, in := range ordered {

@@ -60,6 +60,7 @@ func NewWithDB(db *mongo.Database) http.Handler {
 		hotelRepo := repository.NewHotelInfoRepository(db)
 		recRepo := repository.NewRecommendationRepository(db)
 		sessionRepo := repository.NewStaffSessionRepository(db)
+		orderRepo := repository.NewRestaurantOrderRepository(db)
 
 		// Services
 		broker := events.New()
@@ -86,7 +87,8 @@ func NewWithDB(db *mongo.Database) http.Handler {
 		qrHandler := handler.NewQRHandler(staffAuthHandler)
 		sseHandler := handler.NewSSEHandler(staffAuthHandler, broker)
 		analyticsHandler := handler.NewAnalyticsHandler(ticketRepo)
-		infographicsHandler := handler.NewInfographicsHandler(ticketRepo, convRepo)
+		infographicsHandler := handler.NewInfographicsHandlerFull(ticketRepo, convRepo, orderRepo)
+		restaurantHandler := handler.NewRestaurantHandler(orderRepo)
 
 		// Staff auth: POST /api/staff/login (public), GET /api/staff/me, POST /api/staff/logout (auth)
 		mux.HandleFunc("/api/staff/login", staffAuthHandler.Login)
@@ -107,6 +109,27 @@ func NewWithDB(db *mongo.Database) http.Handler {
 
 		// Infographics: GET /api/analytics/infographics (staff only)
 		mux.Handle("/api/analytics/infographics", staffAuthHandler.AuthMiddleware(http.HandlerFunc(infographicsHandler.ServeHTTP)))
+
+		// Restaurant: public menu; guest places+lists own orders; staff lists all +
+		// updates status.
+		mux.HandleFunc("/api/menu", handler.MenuHandler)
+		mux.HandleFunc("/api/orders/", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/status") && r.Method == http.MethodPatch {
+				staffAuthHandler.AuthMiddleware(http.HandlerFunc(restaurantHandler.UpdateStatus)).ServeHTTP(w, r)
+				return
+			}
+			handler.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Endpoint not found")
+		})
+		mux.Handle("/api/orders", staffAuthHandler.EitherAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				restaurantHandler.Create(w, r)
+			case http.MethodGet:
+				restaurantHandler.List(w, r)
+			default:
+				handler.WriteError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed")
+			}
+		})))
 
 		// Guest identity from QR token: GET /api/guest/me
 		mux.Handle("/api/guest/me", handler.GuestAuthMiddleware(http.HandlerFunc(chatHandler.GuestMe)))
@@ -169,6 +192,7 @@ func NewWithDB(db *mongo.Database) http.Handler {
 			"/api/hotel-info", "/api/hotel_info", "/api/recommendations",
 			"/api/staff/login", "/api/staff/me", "/api/staff/logout",
 			"/api/guest/me", "/api/rooms/", "/api/events", "/api/analytics",
+			"/api/menu", "/api/orders",
 			"/api/docs",
 		}
 		for _, p := range apiPrefixes {

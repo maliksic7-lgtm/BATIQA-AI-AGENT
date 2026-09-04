@@ -31,6 +31,53 @@ func Migrate(ctx context.Context, db *mongo.Database) error {
 	if err := seedStaff(ctx, db); err != nil {
 		return fmt.Errorf("seed staff: %w", err)
 	}
+	if err := seedDemoOrders(ctx, db); err != nil {
+		return fmt.Errorf("seed demo orders: %w", err)
+	}
+	return nil
+}
+
+// seedDemoOrders inserts a handful of realistic restaurant orders so the
+// "most ordered F&B" infographic has data on first run. Only runs when the
+// restaurant_orders collection is empty (idempotent). Not marked demo-only:
+// orders are structurally identical to real ones.
+func seedDemoOrders(ctx context.Context, db *mongo.Database) error {
+	col := db.Collection(restaurantOrdersCol)
+	n, err := col.CountDocuments(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		log.Printf("  restaurant_orders already seeded (%d docs)", n)
+		return nil
+	}
+	now := time.Now()
+	orders := []model.RestaurantOrder{
+		{RoomNumber: "301", SessionID: "demo-sess-301", Status: model.OrderCompleted, Items: []model.OrderItem{{Name: "Gulai Ikan Patin", Quantity: 2, Price: 95000}, {Name: "Nasi Uduk", Quantity: 2, Price: 45000}}, Note: "Room service dinner"},
+		{RoomNumber: "302", SessionID: "demo-sess-302", Status: model.OrderCompleted, Items: []model.OrderItem{{Name: "Sate Padang", Quantity: 3, Price: 65000}, {Name: "Air Mineral", Quantity: 3, Price: 15000}}},
+		{RoomNumber: "303", SessionID: "demo-sess-303", Status: model.OrderCompleted, Items: []model.OrderItem{{Name: "Kopi", Quantity: 4, Price: 25000}, {Name: "Omelet Telur", Quantity: 2, Price: 35000}}},
+		{RoomNumber: "304", SessionID: "demo-sess-304", Status: model.OrderCompleted, Items: []model.OrderItem{{Name: "Ayam Panggang Madu", Quantity: 2, Price: 85000}, {Name: "Jus Buah", Quantity: 2, Price: 30000}}},
+		{RoomNumber: "305", SessionID: "demo-sess-305", Status: model.OrderNew, Items: []model.OrderItem{{Name: "Bubur Ayam", Quantity: 2, Price: 40000}, {Name: "Teh", Quantity: 2, Price: 20000}}},
+	}
+	for i := range orders {
+		id, err := nextID(ctx, db, "restaurant_order_counter")
+		if err != nil {
+			return err
+		}
+		orders[i].ID = id
+		orders[i].OrderNumber = fmt.Sprintf("ORD-%05d", id)
+		orders[i].CreatedAt = now
+		orders[i].UpdatedAt = now
+		total := 0
+		for _, it := range orders[i].Items {
+			total += it.Price * it.Quantity
+		}
+		orders[i].TotalPrice = total
+		if _, err := col.InsertOne(ctx, orders[i]); err != nil {
+			return err
+		}
+	}
+	log.Printf("  seeded %d demo restaurant_orders docs", len(orders))
 	return nil
 }
 
@@ -112,6 +159,11 @@ func ensureIndexes(ctx context.Context, db *mongo.Database) error {
 		staffSessionsCol: {
 			// TTL: Mongo auto-deletes expired sessions
 			mongo.IndexModel{Keys: bson.M{"expires_at": 1}, Options: options.Index().SetExpireAfterSeconds(0)},
+		},
+		restaurantOrdersCol: {
+			mongo.IndexModel{Keys: bson.M{"session_id": 1}},
+			mongo.IndexModel{Keys: bson.M{"status": 1}},
+			mongo.IndexModel{Keys: bson.M{"created_at": -1}},
 		},
 	}
 	for col, models := range indexes {
