@@ -46,8 +46,12 @@ func New() http.Handler {
 func NewWithDB(db *mongo.Database) http.Handler {
 	mux := http.NewServeMux()
 
-	// Health
-	mux.HandleFunc("/api/health", handler.HealthCheck)
+	// Health (DB-aware when a database is present)
+	if db != nil {
+		mux.HandleFunc("/api/health", handler.NewHealthHandlerWithDB(db).ServeHTTP)
+	} else {
+		mux.HandleFunc("/api/health", handler.HealthCheck)
+	}
 
 	// OpenAPI / Swagger UI (works even without DB)
 	mux.Handle("/api/docs/", handler.NewOpenAPIHandler())

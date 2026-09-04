@@ -1,7 +1,7 @@
 // BATIQA AI Guest Assistant - Service Worker
 // Provides offline caching (app shell), runtime caching for public API,
 // and notification handling for ticket status updates.
-const VERSION = 'batiqa-v1.0.0';
+const VERSION = 'batiqa-v1.1.0';
 const APP_SHELL_CACHE = VERSION + '-app';
 const API_CACHE = VERSION + '-api';
 
@@ -13,15 +13,18 @@ const APP_SHELL = [
   '/icon.svg',
   '/css/guest.css',
   '/css/staff.css',
+  '/css/dining.css',
   '/js/api.js',
   '/js/chat.js',
   '/js/staff.js',
   '/js/requests.js',
   '/js/info.js',
+  '/js/dining.js',
   '/guest/index.html',
   '/guest/chat.html',
   '/guest/info.html',
   '/guest/requests.html',
+  '/guest/dining.html',
   '/staff/login.html',
   '/staff/index.html'
 ];
@@ -32,6 +35,7 @@ const API_CACHE_PATHS = [
   '/api/hotel-info',
   '/api/hotel_info',
   '/api/recommendations',
+  '/api/menu',
   '/api/health'
 ];
 
